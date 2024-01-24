@@ -2768,11 +2768,27 @@ def login_M6(client):
                     "login_tag": randomtag.json().get('random')
                 }
                 response = client.request("POST", "api/session", data=data)
-                if response is not None and response.status_code == 200:
+                if response is not None and response.status_code in range(200, 300):
+                    encrypt_type_flag = 2
                     headers = {
                         "X-CSRFToken": response.json()["CSRFToken"],
                         "Cookie": response.headers["set-cookie"]
                     }
+                else:
+                    # M6 好像也没有RSA加密方式
+                    data = {
+                        "username": encrypt_rsa(client.username),
+                        "password": encrypt_rsa(client.passcode),
+                        "encrypt_flag": 1,
+                        "login_tag": randomtag.json().get('random')
+                    }
+                    response = client.request("POST", "api/session", data=data)
+                    if response is not None and response.status_code in range(200, 300):
+                        encrypt_type_flag = 1
+                        headers = {
+                            "X-CSRFToken": response.json()["CSRFToken"],
+                            "Cookie": response.headers["set-cookie"]
+                        }
         else:
             data = {
                 "username": client.username,
@@ -2787,6 +2803,35 @@ def login_M6(client):
     except:
         headers = {}
     return headers
+
+
+def encrypt_rsa(sourceStr):
+    try:
+        if sourceStr is None or sourceStr == "":
+            return sourceStr
+        from Crypto.Cipher import PKCS1_v1_5
+        from Crypto.PublicKey import RSA
+        encrypt_key = "-----BEGIN PUBLIC KEY-----\nMIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAvAIoJ+F0MiuinN903RNX\n"\
+                        "z4umR3b0OackykNmXP+d5qRmxfRS6ymjGwmS1hxBVkGNAulpoeqNDQ1oeilc6IOI\n"\
+                        "6QgsRDzSas4/cXY7/ndz1TK2ocBhh9bxwHfBa0STFyK8004lQ2FKjJj9zrUMC67w\n"\
+                        "U3qvU5np2pddqaIunEEExeU88ZVsNS7jBYDlN/XDdT6sqs0qAicley9ogfeRSh95\n"\
+                        "9KxCG3QnyMSNDk+Gf8Yp4z6hfc8ON1FYsQfFh3yVScvHp0UKbuhs+Mt7TjoyALel\n"\
+                        "cGY18eFt0evYT+n7arRRvdjsDfQz8mJTXYxBy5eTgIVt7s8hufuqtnVH3chkp5o1\n"\
+                        "32LiTTutoliyLsyr+uRitnYPH97vE+edESimql1112ozzs8Axjsh4ugX8YhU2jdA\n"\
+                        "BZSNz6AqfmnALbHRaaxoWinyuKRGA1LPMFSwW3pkbJ8RFqm7PJIza/IKmarqb1S1\n"\
+                        "2d9EqyWjIKD+KAnrsSRttfhgujf5qPCye3m0XhAIDC96JkRsv3x/erD8PQp69fdP\n"\
+                        "QdzTLnHTFSpzDE8KFyj3+YL99ejzxg3TW7/JAeJRX/XXAygRf/1GGOIxv1odXfOn\n"\
+                        "HOlA5ssqfj1Ch6zxEMuf/my6bz5M309pRQheNoEHBMDJlCRQPNeLN5ILw3n9c2cT\n"\
+                        "RUUIfwZlDzalqfR8zWNh0VUCAwEAAQ==\n-----END PUBLIC KEY-----"
+        if sourceStr is None:
+            return None
+        pub_key = RSA.importKey(encrypt_key)
+        pub_cipher = PKCS1_v1_5.new(pub_key)
+        cryptedStr = base64.b64encode(pub_cipher.encrypt(sourceStr.encode()))
+        cryptedStr = str(cryptedStr, encoding='utf-8')
+        return cryptedStr
+    except Exception as e:
+        return sourceStr
 
 
 def logout(client):
@@ -3780,9 +3825,33 @@ def resetBMCM6(client, type):
     return JSON
 
 
+def resetBMCM7(client, type):
+    JSON = {}
+    if type.upper() != "BMC" and type.upper() != "KVM":
+        JSON['code'] = 1
+        JSON['data'] = 'reset BMC or KVM only.'
+    data = {
+        "reset": type.upper(),
+        "currentuserpassword": encrypt_rsa(client.passcode)
+    }
+    response = client.request("POST", "api/diagnose/bmc-reset", client.getHearder(), json=data)
+    if response is None:
+        JSON['code'] = 1
+        JSON['data'] = 'Failed to call BMC interface api/diagnose/bmc-reset ,response is none'
+    elif response.status_code in range(200, 300):
+        try:
+            JSON["code"] = 0
+            JSON["data"] = "reset " + type + " success"
+        except:
+            JSON['code'] = 1
+            JSON['data'] = formatError("api/diagnose/bmc-reset", response)
+    else:
+        JSON['code'] = 1
+        JSON['data'] = formatError("api/diagnose/bmc-reset", response)
+    return JSON
+
+
 # 开机自检代码
-
-
 def getBiosPostCode(client):
     JSON = {}
     response = client.request("GET", "api/diagnose/bios-post-code", client.getHearder())
@@ -7812,6 +7881,22 @@ def testAlertPolicy(client, settings):
     else:
         JSON['code'] = 1
         JSON['data'] = formatError("api/settings/snmp", response)
+    return JSON
+
+
+def getgpu(client):
+    JSON = {}
+    response = client.request("GET", "api/gpu/gpu_info", client.getHearder(), None, None, None, None)
+    if response is None:
+        JSON['code'] = 1
+        JSON['data'] = 'Failed to call BMC interface api/gpu/gpu_info, response is none'
+    elif response.status_code in range(200, 300):
+        result = response.json()
+        JSON['code'] = 0
+        JSON['data'] = result
+    else:
+        JSON['code'] = 1
+        JSON['data'] = formatError("api/gpu/gpu_info", response)
     return JSON
 
 

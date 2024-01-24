@@ -227,3 +227,12 @@ NF5466-M7-C0-R0-00:
     1.3505: CommonM7_13505
 NF5280A6:
     common: CommonA6
+NE5260M7:
+    common: CommonM7
+    1.3505: CommonM7_13505
+NF5688-M7-C0-R0-00:
+    common: CommonM7
+    1.3505: CommonM7_13505
+NF5468-M7-A0-F0-00:
+    common: CommonM7
+    1.3505: CommonM7_13505
