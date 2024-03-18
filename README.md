@@ -7,5 +7,5 @@ Circumstance instruction:
 inManage relies on the Ipmitool tool.
 
 Main steps:
-pip install inManage
-yum install ipmitool
+* pip install inManage
+* yum install ipmitool
