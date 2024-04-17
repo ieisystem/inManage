@@ -11354,7 +11354,7 @@ class CommonM6(Base):
         if args.mode == "auto" and args.channel_number is not None:
             ncsiinfo.State('Failure')
             ncsiinfo.Message('port cannot be set when NCSI mode is auto')
-            return ncsiinfo
+            return ncsiinfoa
         if args.mode == "disable" and (args.nic_type is not None or args.channel_number is not None):
             ncsiinfo.State('Failure')
             ncsiinfo.Message('port and nicname cannot be set when NCSI mode is disable')
@@ -12035,7 +12035,7 @@ def createVirtualDrive(client, args):
         result.State("Failure")
         result.Message(['get physical disk information failed!' + res.get('data')])
         return result
-    if args.Info is not None:
+    if 'Info' in args and args.Info is not None:
         for pd in ctrl_list_dict:
             ctrl_list_dict.get(pd).sort()
         LSI_flag = False
@@ -12411,7 +12411,7 @@ def setVirtualDrive(client, args):
     for pd in ctrl_ld_list_dict:
         ctrl_ld_list_dict.get(pd).sort()
 
-    if args.Info is not None:
+    if 'Info' in args and args.Info is not None:
         LSI_flag = False
         raidList = []
         for ctrlid in ctrl_id_name_dict:
@@ -12574,7 +12574,7 @@ def setPhysicalDrive(client, args):
     for pd in ctrl_list_dict:
         ctrl_list_dict.get(pd).sort()
 
-    if args.Info is not None:
+    if 'Info' in args and args.Info is not None:
         LSI_flag = False
         raidList = []
         for ctrlid in ctrl_id_name_dict:

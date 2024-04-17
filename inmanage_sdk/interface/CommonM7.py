@@ -5479,7 +5479,7 @@ def createVirtualDrive(client, args):
         result.State("Failure")
         result.Message(['get physical disk information failed!' + res.get('data')])
         return result
-    if args.Info is not None:
+    if 'Info' in args and args.Info is not None:
         for pd in ctrl_list_dict:
             ctrl_list_dict.get(pd).sort()
         LSI_flag = False

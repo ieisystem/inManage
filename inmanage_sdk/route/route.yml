@@ -254,4 +254,149 @@ NF5298M7:
 NF5298-M7-C0-R0-00:
     common: CommonM7
     1.3505: CommonM7_13505
-
+KR6288-X2-A0-R0-00:
+    common: CommonM7
+    1.3505: CommonM7_13505
+KR6288-X2-C0-R0-00:
+    common: CommonM7
+    1.3505: CommonM7_13505
+KR6288-E2-A0-R0-00:
+    common: CommonA7
+    1.1308: CommonA7_11308
+KR6288-E2-C0-R0-00:
+    common: CommonA7
+    1.1308: CommonA7_11308
+KR6298-X2-A0-R0-00:
+    common: CommonM7
+    1.3505: CommonM7_13505
+KR6298-X2-C0-R0-00:
+    common: CommonM7
+    1.3505: CommonM7_13505
+NF5698-A7-A0-R0-00:
+    common: CommonM7
+    1.3505: CommonM7_13505
+NF5698-A7-C0-R0-00:
+    common: CommonM7
+    1.3505: CommonM7_13505
+NF5688-A7-C0-R0-00:
+    common: CommonA7
+    1.1308: CommonA7_11308
+KR6298-E2-A0-R0-00:
+    common: CommonM7
+    1.3505: CommonM7_13505
+KR6298-E2-C0-R0-00:
+    common: CommonM7
+    1.3505: CommonM7_13505
+NF5448-M7-C0-R0-00:
+    common: CommonM7
+    1.3505: CommonM7_13505
+KR4248-X2-C0-R0-00:
+    common: CommonM7
+    1.3505: CommonM7_13505
+KR4268-X2-A0-R0-00:
+    common: CommonM7
+    1.3505: CommonM7_13505
+NF5468-M7-C0-R0-00:
+    common: CommonM7
+    1.3505: CommonM7_13505
+KR4268-X2-C0-R0-00:
+    common: CommonM7
+    1.3505: CommonM7_13505
+KR4268-X2-A0-F0-00:
+    common: CommonM7
+    1.3505: CommonM7_13505
+KR4268-E2-A0-R0-00:
+    common: CommonA7
+    1.1308: CommonA7_11308
+KR6288-X1-A0-F0-00:
+    common: CommonM6
+    4.1401: CommonM6_41401
+    4.141: CommonM6_4140a
+KR4288-E1-A0-R0-00:
+    common: CommonA5
+KR4268-X1-A0-R0-00:
+    common: CommonM6
+    4.1401: CommonM6_41401
+    4.141: CommonM6_4140a
+KR4268-E1-A0-R0-00:
+    common: CommonA5
+KR1280-X2-A0-R0-00:
+    common: CommonM7
+    1.3505: CommonM7_13505
+KR1280-X2-A0-F0-00:
+    common: CommonM7
+    1.3505: CommonM7_13505
+KR1280-X2-C0-R0-00:
+    common: CommonM7
+    1.3505: CommonM7_13505
+KR1280-X2-M0-U0-00:
+    common: CommonM7
+    1.3505: CommonM7_13505
+KR2280-X2-A0-R0-00:
+    common: CommonM7
+    1.3505: CommonM7_13505
+KR2280-X2-A0-F0-00:
+    common: CommonM7
+    1.3505: CommonM7_13505
+KR2280-X2-C0-R0-00:
+    common: CommonM7
+    1.3505: CommonM7_13505
+KR1270-X2-A0-R0-00:
+    common: CommonM7
+    1.3505: CommonM7_13505
+KM1270-X2-A0-R0-00:
+    common: CommonM7
+    1.3505: CommonM7_13505
+KM1270-X2-C0-R0-00:
+    common: CommonM7
+    1.3505: CommonM7_13505
+NS5160-M6-A0-R0-00:
+    common: CommonM6
+    4.1401: CommonM6_41401
+    4.141: CommonM6_4140a
+KM1260-X1-A0-R0-00:
+    common: CommonM6
+    4.1401: CommonM6_41401
+    4.141: CommonM6_4140a
+KR2460-X2-A0-R0-00:
+    common: CommonM7
+    1.3505: CommonM7_13505
+KR2460-X2-A0-F0-00:
+    common: CommonM7
+    1.3505: CommonM7_13505
+KR2460-X2-C0-R0-00:
+    common: CommonM7
+    1.3505: CommonM7_13505
+KR4480-X2-A0-R0-00:
+    common: CommonM7
+    1.3505: CommonM7_13505
+KR1280-E2-A0-R0-00:
+    common: CommonA7
+    1.1308: CommonA7_11308
+KR1280-E2-C0-R0-00:
+    common: CommonA7
+    1.1308: CommonA7_11308
+KR2280-E2-A0-R0-00:
+    common: CommonA7
+    1.1308: CommonA7_11308
+KR2280-E2-A0-F0-00:
+    common: CommonA7
+    1.1308: CommonA7_11308
+KR2280-E2-C0-R0-00:
+    common: CommonA7
+    1.1308: CommonA7_11308
+KR4276-X2-A0-R0-00:
+    common: CommonM7
+    1.3505: CommonM7_13505
+KR4276-X2-A0-F0-00:
+    common: CommonM7
+    1.3505: CommonM7_13505
+KR2266-X2-A0-R0-00:
+    common: CommonM7
+    1.3505: CommonM7_13505
+KR4266-X2-A0-R0-00:
+    common: CommonM7
+    1.3505: CommonM7_13505
+KR4266-X2-C0-R0-00:
+    common: CommonM7
+    1.3505: CommonM7_13505
