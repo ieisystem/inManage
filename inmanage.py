@@ -22,7 +22,7 @@ current_time = time.strftime(
     '%Y-%m-%d   %H:%M:%S',
     time.localtime(
         time.time()))
-__version__ = '1.1.0'
+__version__ = '1.1.1'
 
 
 ERR_dict = {
@@ -77,18 +77,15 @@ def main(params):
     if firmwareVersion is None:
         res['State'] = "Failure"
         res['Message'] = ["cannot get BMC version"]
-        return
-    args.hostPlatform = productName
+        return res
     configutil = configUtil.configUtil()
-    impl = configutil.getRouteOption(productName, firmwareVersion)
+    impl, platform = configutil.getRouteOption(productName, firmwareVersion)
+    args.productName = productName
+    args.platform = platform
     if 'Error' in impl:
         res['State'] = "Failure"
         res['Message'] = [impl]
         return res
-    # if 'M5' not in impl and 'M6' not in impl and 'A5' not in impl and 'A6' not in impl:
-    #     res['State'] = "Failure"
-    #     res['Message'] = ['Not Support']
-    #     return res
     module_impl = 'inmanage_sdk.interface.' + impl
     obj = import_module(module_impl)
     targetclass = getattr(obj, impl)
@@ -103,6 +100,7 @@ def main(params):
         args.host,
         args.username,
         args.passcode,
+        platform,
         args.port,
         'lanplus')
     try:
@@ -151,4 +149,3 @@ def dict_to_object(dictobj):
             k = 'passcode'
         inst[k] = dict_to_object(v)
     return inst
-

@@ -9853,7 +9853,6 @@ class CommonM6(Base):
                             ["SMTP server password(-PW) cannot contain ' '(space)."])
                         RestFunc.logout(client)
                         return smtpinfo
-                    # PassWord = RestFunc.Encrypt1('add', PassWord)
                 else:
                     if SMTPAUTH == 1:
                         smtpinfo.State("Failure")
@@ -11354,7 +11353,7 @@ class CommonM6(Base):
         if args.mode == "auto" and args.channel_number is not None:
             ncsiinfo.State('Failure')
             ncsiinfo.Message('port cannot be set when NCSI mode is auto')
-            return ncsiinfoa
+            return ncsiinfo
         if args.mode == "disable" and (args.nic_type is not None or args.channel_number is not None):
             ncsiinfo.State('Failure')
             ncsiinfo.Message('port and nicname cannot be set when NCSI mode is disable')
@@ -13709,7 +13708,7 @@ def setUser1(client, args):
             user_old["changepassword"] = 0
             user_old["confirm_password"] = ""
             user_old["password"] = ""
-            user_old["session_confirm"] = ""
+            user_old["session_confirm"] = client.passcode
             user_old["password_size"] = "bytes_16"
             user_old["email_format"] = "ami_format"
             if args.email is not None:

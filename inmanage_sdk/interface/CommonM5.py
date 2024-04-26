@@ -17406,7 +17406,7 @@ def getGPU(client, args):
 
 def printGPUInfo(responds, args, gpuinfo):
     result = ResultBean()
-    args.hostType = args.hostPlatform
+    args.hostType = args.productName
     if responds is None:
         result.State('Failure')
         result.Message('GPU information request failed!')

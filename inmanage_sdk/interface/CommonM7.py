@@ -4872,6 +4872,29 @@ class CommonM7(CommonM6):
         RestFunc.logout(client)
         return result
 
+    def resetkvm(self, client, args):
+        result = ResultBean()
+        # login
+        headers = RestFunc.login_M6(client)
+        if headers == {}:
+            login_res = ResultBean()
+            login_res.State("Failure")
+            login_res.Message(
+                ["login error, please check username/password/host/port"])
+            return login_res
+        client.setHearder(headers)
+
+        res = RestFunc.resetBMCM7(client, 'kvm')
+        if res.get('code') == 0 and res.get('data') is not None:
+            result.State("Success")
+            result.Message([res.get('data')])
+        else:
+            result.State("Failure")
+            result.Message([res.get('data')])
+
+        RestFunc.logout(client)
+        return result
+
     def resetbmc(self, client, args):
         result = ResultBean()
 
@@ -4884,7 +4907,7 @@ class CommonM7(CommonM6):
         client.setHearder(headers)
 
         RestFunc.securityCheckByRest(client)
-        res = RestFunc.resetBMCM7(client, args.type)
+        res = RestFunc.resetBMCM7(client, 'bmc')
         if res.get('code') == 0 and res.get('data') is not None:
             result.State("Success")
             result.Message([res.get('data')])
