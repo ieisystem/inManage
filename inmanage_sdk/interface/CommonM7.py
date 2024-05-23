@@ -5454,6 +5454,97 @@ class CommonM7(CommonM6):
         result.Message(['The M6 model does not support this feature.'])
         return result
 
+    def setpsuconfig(self, client, args):
+        res = ResultBean()
+        try:
+            count_res = IpmiFunc.getPsuCountByIpmi(client)
+            if count_res.get('code') == 0:
+                count_data = str(count_res.get('data')).split(" ")
+                max_count = int(count_data[0])  # 该设备的最大配置的数量
+                current_count = int(count_data[1])  # 设备出厂配置的数量/设备实际在位数量, 默认出货配置等于满配数量
+                if args.id < 0 or args.id > (current_count - 1):
+                    res.State("Failure")
+                    res.Message(['Psu id error, please choose from ' + str(list(range(current_count)))])
+                    return res
+                status_dict = {
+                    "normal": "00",
+                    "active": "01",
+                    "standby": "02",
+                }
+                set_cmd = "raw 0x3c 0x28 0x0" + str(current_count)
+                for i in range(current_count):
+                    single_res = IpmiFunc.getPsuConfigByIpmi(client, i)
+                    if single_res.get('code') == 0:
+                        single_data = str(single_res.get('data')).split(" ")
+                        if args.id == i:
+                            if single_data[1] != "01":
+                                res.State("Failure")
+                                res.Message(['this psu is not present.'])
+                                return res
+                            elif single_data[2] == status_dict.get(args.switch, ""):
+                                res.State("Success")
+                                res.Message(["this psu is already %s, no need to set" % str(args.switch)])
+                                return res
+                            else:
+                                set_cmd += " 0x" + str(i) + " 0x" + status_dict.get(args.switch)
+                        else:
+                            set_cmd += " 0x" + str(i) + " 0x" + str(single_data[2])
+                    else:
+                        res.State("Failure")
+                        res.Message(['get psu info failed.'])
+                        return res
+                set_res = IpmiFunc.setPsuConfigByIpmi(client, set_cmd)
+                if set_res.get('code') == 0:
+                    res.State("Success")
+                    res.Message(["set psu config success."])
+                else:
+                    res.State("Failure")
+                    res.Message([str(set_res.get('data'))])
+            else:
+                res.State("Failure")
+                res.Message(["get psu count failed."])
+        except Exception as e:
+            res.State("Failure")
+            res.Message([str(e)])
+        return res
+
+    def getpsuconfig(self, client, args):
+        res = ResultBean()
+        try:
+            count_res = IpmiFunc.getPsuCountByIpmi(client)
+            if count_res.get('code') == 0:
+                count_data = str(count_res.get('data')).split(" ")
+                max_count = int(count_data[0])  # 该设备的最大配置的数量
+                current_count = int(count_data[1])  # 设备出厂配置的数量/设备实际在位数量, 默认出货配置等于满配数量
+                psu_list = []
+                present_dict = {
+                    "00": "No",
+                    "01": "Yes"
+                }
+                status_dict = {
+                    "00": "Normal",
+                    "01": "Active",
+                    "02": "Standby",
+                }
+                for i in range(current_count):
+                    single_res = IpmiFunc.getPsuConfigByIpmi(client, i)
+                    if single_res.get('code') == 0:
+                        single_data = str(single_res.get('data')).split(" ")
+                        single_dict = {}
+                        single_dict["Id"] = str(i)
+                        single_dict["Present"] = present_dict.get(single_data[1], "N/A")
+                        single_dict["Status"] = status_dict.get(single_data[2], "N/A")
+                        psu_list.append(single_dict)
+                res.State("Success")
+                res.Message([psu_list])
+            else:
+                res.State("Failure")
+                res.Message(["get psu count failed."])
+        except Exception as e:
+            res.State("Failure")
+            res.Message([str(e)])
+        return res
+
 
 def createVirtualDrive(client, args):
     result = ResultBean()
