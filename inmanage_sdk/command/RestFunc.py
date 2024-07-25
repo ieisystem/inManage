@@ -4683,6 +4683,23 @@ def setOverrideBMCConfig(client):
 
 # syncmode
 
+def setBiosImage(client, image):
+    JSON = {}
+    if image == 0 or image == 1 or image == 2:
+        data = {"image_num": image}
+    else:
+        data = {"image_num": 2}
+
+    response = client.request("POST", "api/settings/selectbiosflash", client.getHearder(), json=data, timeout=500)
+    if response.status_code in range(200, 300):
+        JSON['code'] = 0
+        JSON['data'] = "set image ok"
+        return JSON
+    else:
+        JSON['code'] = 1
+        JSON['data'] = formatError("api/maintenance/selectbiosflash", response)
+    return JSON
+
 
 def syncmodeByRest(client, flashconf, mode):
     JSON = {}

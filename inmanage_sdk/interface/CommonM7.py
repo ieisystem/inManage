@@ -19,9 +19,7 @@ from inmanage_sdk.interface.ResEntity import (
     CPUBean, Cpu,
     FanBean, Fan,
     MemoryBean, Memory,
-    PSUBean, PSUSingleBean, NICBean, NicAllBean, NicPort, NICController
-
-)
+    PSUBean, PSUSingleBean, NICBean, NicAllBean, NicPort, NICController)
 
 retry_count = 0
 
@@ -2655,12 +2653,12 @@ class CommonM7(CommonM6):
 
         self.wirte_log(log_path, "Upload File", "Network Ping OK", "")
         # checkname
-        p = '\.hpm$'
+        p = '\.hpms?$'
         file_name = os.path.basename(args.url)
         if not re.search(p, file_name, re.I):
             result.State("Failure")
-            result.Message(["Please input filename with suffix .hpm."])
-            self.wirte_log(log_path, "Upload File", "File Not Endwith hpm", result.Message[0])
+            result.Message(["Please input filename with suffix .hpm or .hpms."])
+            self.wirte_log(log_path, "Upload File", "File Not Endwith .hpm or .hpms.", result.Message[0])
             return result
 
         # 文件校验
@@ -2767,593 +2765,28 @@ class CommonM7(CommonM6):
             result.Message(["BMC upgrade cannot set mode to manual if override configuration."])
             self.wirte_log(log_path, "Parameter Verify", "Parameter Error", result.Message[0])
             return result
-        upgrade_count = 0
-        while True:
-            # 判断session是否存在，存在则logout&del
-            if os.path.exists(session_path):
-                with open(session_path, 'r') as oldsession:
-                    headers = oldsession.read()
-                    headers_json = json.loads(str(headers).replace("'", '"'))
-                    client.setHearder(headers_json)
-                    # logout
-                    RestFunc.logout(client)  # 删除session
-                if os.path.exists(session_path):
-                    os.remove(session_path)
-            # 删除
-            if result.State == "Success":
-                return result
-            elif result.State == "Abort":
-                result.State = "Failure"
-                return result
-            else:
-                if upgrade_count > retry_count:
-                    return result
-                else:
-                    if upgrade_count >= 1:
-                        # 重新升级 初始化result
-                        self.wirte_log(log_path, "Upload File", "Upgrade Retry " + str(upgrade_count) + " Times", "")
-                        result = ResultBean()
-                    upgrade_count = upgrade_count + 1
-            # login
-            headers = {}
-            logcount = 0
-            while True:
-                # 等6分钟
-                if logcount > 18:
-                    break
-                else:
-                    logcount = logcount + 1
-                    time.sleep(20)
-                # login
-                headers = RestFunc.login_M6(client)
-                if headers != {}:
-                    # 记录session
-                    with open(session_path, 'w') as new_session:
-                        new_session.write(str(headers))
-                    client.setHearder(headers)
-                    break
-                else:
-                    self.wirte_log(log_path, "Upload File", "Connect Failed", "Connect number:" + str(logcount))
-            # 10次无法登陆 不再重试
-            if headers == {}:
-                result.State("Failure")
-                result.Message(["Cannot log in to BMC."])
-                return result
-
-            # 获取BMC版本
-            # get old version
-            fw_res = RestFunc.getFwVersion(client)
-            fw_old = {}
-            if fw_res == {}:
-                self.wirte_log(log_path, "Upload File", "Connect Failed", "Cannot get current firmware version.")
-            elif fw_res.get('code') == 0 and fw_res.get('data') is not None:
-                fwdata = fw_res.get('data')
-                if args.type == "BMC":
-                    for fw in fwdata:
-                        if fw.get('dev_version') == '':
-                            version = "-"
-                        else:
-                            index_version = fw.get('dev_version', "").find('(')
-                            if index_version == -1:
-                                version = fw.get('dev_version')
-                            else:
-                                version = fw.get('dev_version')[:index_version].strip()
-                        if "BMC0" in fw.get("dev_name", ""):
-                            fw_old["BMC0"] = version
-                            if "Inactivate" in fw.get("dev_name", ""):
-                                fw_old["InactivateBMC"] = "BMC0"
-                            else:
-                                fw_old["ActivateBMC"] = "BMC0"
-                        elif "BMC1" in fw.get("dev_name", ""):
-                            fw_old["BMC1"] = version
-                            if "Inactivate" in fw.get("dev_name", ""):
-                                fw_old["InactivateBMC"] = "BMC1"
-                            else:
-                                fw_old["ActivateBMC"] = "BMC1"
-
-                    if "BMC0" not in fw_old and "BMC1" not in fw_old:
-                        version_info = "Cannot get current BMC version, " + str(fwdata)
-                        self.wirte_log(log_path, "Upload File", "Connect Failed", version_info)
-                else:
-                    for fw in fwdata:
-                        if fw.get('dev_version') == '':
-                            version = "-"
-                        else:
-                            index_version = fw.get('dev_version', "").find('(')
-                            if index_version == -1:
-                                version = fw.get('dev_version')
-                            else:
-                                version = fw.get('dev_version')[:index_version].strip()
-                        if "Active" in fw.get("dev_name", ""):
-                            fw_old["ActivateBMC"] = version
-                        elif "Backup" in fw.get("dev_name", ""):
-                            fw_old["InactivateBMC"] = version
-
-                    if "ActivateBMC" not in fw_old and "InactivateBMC" not in fw_old:
-                        version_info = "Cannot get current BMC version, " + str(fwdata)
-                        self.wirte_log(log_path, "Upload File", "Connect Failed", version_info)
-
-            else:
-                version_info = "Cannot get current firmware version, " + str(fw_res.get('data'))
-                self.wirte_log(log_path, "Upload File", "Connect Failed", version_info)
-
-            # 调check接口，不管成功与否继续升级
-            # 旧版本BMC无此接口，新版本若check失败仍然可以升级获取进度，但是不会生效
-            RestFunc.securityCheckByRest(client)
-            if args.type == "BMC_PFR":
-                res_syn = RestFunc.syncmodePFRByRest(client, args.override, args.mode, args.type, args.image)
-            else:
-                preserveConfig = RestFunc.preserveBMCConfig(client, args.override)
-                if preserveConfig == {}:
-                    result.State("Failure")
-                    result.Message(["Cannot override config"])
-                    continue
-                elif preserveConfig.get('code') == 0:
-                    res_syn = RestFunc.syncmodeByRest(client, args.override, args.mode)
-                else:
-                    result.State("Failure")
-                    result.Message(["set override config error, " + str(preserveConfig.get('data'))])
-                    continue
-            if res_syn == {}:
-                result.State("Failure")
-                result.Message(["cannot set syncmode"])
-                self.wirte_log(log_path, "Upload File", "Connect Failed", result.Message)
-                continue
-            elif res_syn.get('code') == 0:
-                self.wirte_log(log_path, "Upload File", "Start", "")
-            else:
-                result.State("Failure")
-                result.Message(["set sync mode error, " + str(res_syn.get('data'))])
-                self.wirte_log(log_path, "Upload File", "Connect Failed", result.Message)
-                continue
-            res_upload = RestFunc.uploadfirmwareByRest1(client, args.url)
-            if res_upload == {}:
-                result.State("Failure")
-                result.Message(["cannot upload firmware update file"])
-                self.wirte_log(log_path, "Upload File", "Connect Failed", "Exceptions occurred while calling interface")
-                continue
-            elif res_upload.get('code') == 0:
-                self.wirte_log(log_path, "Upload File", "Success", "")
-            else:
-                result.State("Failure")
-                result.Message(["upload firmware error, " + str(res_upload.get('data'))])
-                if res_upload.get('data', 0) == 1 or res_upload.get('data', 0) == 2:
-                    self.wirte_log(log_path, "Upload File", "File Not Exist", str(res_upload.get('data')))
-                elif res_upload.get('data', 0) == 404:
-                    self.wirte_log(log_path, "Upload File", "Invalid URI", str(res_upload.get('data')))
-                else:
-                    self.wirte_log(log_path, "Upload File", "Connect Failed", str(res_upload.get('data')))
-                continue
-            # verify
-            if args.type != "BMC_PFR":
-                time.sleep(20)
-            self.wirte_log(log_path, "File Verify", "Start", "")
-            res_verify = RestFunc.getverifyresultByRest(client)
-            if res_verify == {}:
-                result.State("Failure")
-                result.Message(["cannot verify firmware update file"])
-                self.wirte_log(log_path, "File Verify", "Connect Failed", "Exceptions occurred while calling interface")
-                continue
-            elif res_verify.get('code') == 0:
-                self.wirte_log(log_path, "File Verify", "Success", "")
-            else:
-                result.State("Failure")
-                result.Message(["cannot verify firmware update file, " + str(res_verify.get('data'))])
-                self.wirte_log(log_path, "File Verify", "Data Verify Failed", str(res_verify.get('data')))
-                continue
-            # apply
-            task_dict = {"BMC": 0, "BIOS": 1, "PSUFW": 5, "CPLD": 2, "FRONTDISKBPCPLD": 3, "REARDISKBPCPLD": 4,
-                         "BMC_PFR": 10}
-            self.wirte_log(log_path, "Apply", "Start", "")
-            # max error number
-            error_count = 0
-            # max progress number
-            count = 0
-            # 100num  若进度10次都是100 则主动reset
-            count_100 = 0
-            # 循环查看apply进度
-            error_info = ""
-            while True:
-                if count > 60:
-                    break
-                if error_count > 10:
-                    break
-                if count_100 > 5:
-                    break
-                count = count + 1
-                time.sleep(10)
-                res_progress = RestFunc.getTaskInfoByRest(client)
-                if res_progress == {}:
-                    error_count = error_count + 1
-                    error_info = 'Failed to call BMC interface api/maintenance/background/task_info ,response is none'
-                elif res_progress.get('code') == 0 and res_progress.get('data') is not None:
-                    tasks = res_progress.get('data')
-                    task = None
-                    for t in tasks:
-                        if t["id"] == task_dict.get(args.type, -1):
-                            task = t
-                            break
-                    # 无任务则退出
-                    if task is None:
-                        result.State("Failure")
-                        result.Message(["No apply task found in task list."])
-                        self.wirte_log(log_path, "Apply", "Image and Target Component Mismatch", result.Message)
-                        break
-                    error_info = str(task)
-                    if task["status"] == "COMPLETE":
-                        break
-                    elif task["status"] == "FAILED":
-                        self.wirte_log(log_path, "Apply", "Finish", "Apply(FLASH) failed.")
-                        result.State("Failure")
-                        result.Message(["Apply(FLASH) failed."])
-                        break
-                    elif task["status"] == "CANCELED":
-                        self.wirte_log(log_path, "Apply", "Finish", "Apply(FLASH) canceled.")
-                        result.State("Failure")
-                        result.Message(["Apply(FLASH) canceled."])
-                        break
-                    else:
-                        self.wirte_log(log_path, "Apply", "In Progress", "progress:" + str(task["progress"]) + "%")
-                        if str(task["progress"]) == 100:
-                            count_100 = count_100 + 1
-                else:
-                    error_count = error_count + 1
-                    error_info = str(res_progress.get('data'))
-
-            # 判断apply是否结束
-            if result.State == "Failure":
-                continue
-
-            # 获取apply进度结束
-            self.wirte_log(log_path, "Apply", "Success", "")
-
-            if args.mode == "Manual":
-                # manual 需要手动重启bmc
-                result.State('Success')
-                result.Message(["Activate pending, host is power " + self.getServerStatus(
-                    client) + " now, image save in BMC FLASH and will apply later, trigger: bmcreboot."])
-                self.wirte_log(log_path, "Activate", "Write to Temporary FLASH Success", "reboot bmc to activate")
-
-            # 判断apply是否结束
-            if result.State == "Failure" or result.State == "Success":
-                continue
-
-            # 未结束需要等待重启
-            # 查看bmc activate状态
-            # 并且刷新另一块
-            # 一般4 5分钟即可从备镜像启动成功
-            # 15分钟未启动则升级失败 从备份镜像启动，启动成功需要rollback
-            # 10分钟内启动成功则说明刷新成功
-            self.wirte_log(log_path, "Activate", "Start", "BMC will reboot")
-            time.sleep(360)
-
-            uname = client.username
-            pword = client.passcode
-            # web service 是否启动
-            reset_try_count = 0
-            headers = {}
-            while True:
-                time.sleep(20)
-                reset_try_count = reset_try_count + 1
-                # 10分钟未启动 尝试使用 admin 登陆
-                if reset_try_count == 30:
-                    client.username = "admin"
-                    client.passcode = "admin"
-                # 使用默认用户admin尝试登陆
-                if reset_try_count > 32:
-                    result.State('Failure')
-                    result.Message(["Cannot login BMC. Get fw version failed."])
-                    self.wirte_log(log_path, "Activate", "BMC Reboot Failed", result.Message)
-                    break
-                try:
-                    headers = RestFunc.login_M6(client)
-                    if headers != {}:
-                        with open(session_path, 'w') as new_session:
-                            new_session.write(str(headers))
-                        break
-                except Exception as e:
-                    # print(str(e))
-                    continue
-
-            if result.State == 'Failure':
-                client.username = uname
-                client.passcode = pword
-                continue
-
+        # login
+        headers = {}
+        # login
+        headers = RestFunc.login_M6(client)
+        if headers != {}:
             client.setHearder(headers)
+        else:
+            login_res = ResultBean()
+            login_res.State("Failure")
+            login_res.Message(["login error, please check username/password/host/port"])
+            self.wirte_log(log_path, "Upload File", "login error", "please check username/password/host/port")
+            return login_res
 
-            # BMC有bug 回滚的时候CPU利用率超高不准 可能出现都不是active的bug
-            # 查看BMC启动的主备
-
-            res_ver = IpmiFunc.getMcInfoByIpmi(client)
-            image1_update_info = ""
-            image2_update_info = ""
-            if 'code' in res_ver and res_ver.get("code", 1) == 0:
-                version_12 = res_ver.get("data").get("firmware_revision")
-                version_3 = int(res_ver.get("data").get("aux_firmware_rev_info").split(";")[0], 16)
-                version_new = version_12 + "." + str(version_3)
-                if args.type == "BMC_PFR":
-                    if args.image == "active":
-                        if "ActivateBMC" in fw_old:
-                            image1_update_info = "BMC update successfully, Version: image1 image change from " + \
-                                                 fw_old.get("ActivateBMC", "-") + " to " + version_new
-                        else:
-                            image1_update_info = "BMC update successfully, new version: " + version_new
-                    else:
-                        if "InactivateBMC" in fw_old:
-                            if fw_old.get("ActivateBMC", "") == "BMC1":
-                                image1_update_info = "BMC update successfully, Version: image1 change from " + \
-                                                     fw_old.get("InactivateBMC", "-") + " to " + version_new
-                            else:
-                                image1_update_info = "BMC update successfully, new version: " + version_new
-                else:
-                    if fw_old.get("ActivateBMC", "") == "BMC1":
-                        image1_update_info = "BMC update successfully, Version: image1 change from " + fw_old.get(
-                            "BMC0", "-") + " to " + version_new
-                    elif fw_old.get("ActivateBMC", "") == "BMC0":
-                        image2_update_info = "BMC update successfully, Version: image2 change from " + fw_old.get(
-                            "BMC1", "-") + " to " + version_new
-                    else:
-                        image1_update_info = "BMC update successfully, new version: " + version_new
-
-                self.wirte_log(log_path, "Activate", "Version Verify OK", image1_update_info + image2_update_info)
-            else:
-                result.State("Failure")
-                result.Message(["Flash image " + fw_old.get("InactivateBMC", "") + " error." + res_ver.get("data", "")])
-                self.wirte_log(log_path, "Activate", "Version Verify Failed", result.Message)
-                continue
-
-            if args.type == "BMC_PFR":
-                result.State("Success")
-                result.Message(["update bmc complete"])
-                continue
-
-            # 校验第二个镜像
-            image_to_set2 = ""
-            if "ActivateBMC" in fw_old:
-                if fw_old["ActivateBMC"] == "BMC1":
-                    image_to_set2 = "Image2"
-                elif fw_old["ActivateBMC"] == "BMC0":
-                    image_to_set2 = "Image1"
-                self.wirte_log(log_path, "Apply", "Start", "Flash" + image_to_set2)
-            else:
-                self.wirte_log(log_path, "Apply", "Start", "Flash image")
-
-            # max error number
-            error_count2 = 0
-            # max progress number
-            count2 = 0
-            # 100num  若进度10次都是100 则主动reset
-            count_1002 = 0
-            # 循环查看apply进度
-            error_info2 = ""
-            while True:
-                if count2 > 120:
-                    result.State("Abort")
-                    result.Message([
-                        "Apply cost too much time, please check if upgrade is ok or not. Last response is " + error_info2])
-                    self.wirte_log(log_path, "Apply", "Connect Failed", result.Message)
-                    break
-                if error_count2 > 10:
-                    result.State("Abort")
-                    result.Message(
-                        ["Get apply progress error, please check is upgraded or not. Last response is " + error_info2])
-                    self.wirte_log(log_path, "Apply", "Connect Failed", result.Message)
-                    # check是否升级成功
-                    break
-                if count_1002 > 5:
-                    result.State("Abort")
-                    result.Message([
-                        "Apply progress is 100% but it does not complete, check if upgrade is ok or not. Last response is " + error_info2])
-                    self.wirte_log(log_path, "Apply", "In Progress", result.Message)
-                    break
-                count2 = count2 + 1
-                time.sleep(10)
-                res_progress = RestFunc.getTaskInfoByRest(client)
-                if res_progress == {}:
-                    error_count2 = error_count2 + 1
-                    error_info2 = "Failed to call BMC interface api/maintenance/background/task_info ,response is none"
-                elif res_progress.get('code') == 0 and res_progress.get('data') is not None:
-                    tasks = res_progress.get('data')
-                    task = None
-                    for t in tasks:
-                        if t["id"] == task_dict.get(args.type, -1) or "rollback" in t["des"]:
-                            task = t
-                            break
-                    # 无任务则退出
-                    if task == None:
-                        # 无任务应该是刷的同一版本 无需回滚
-                        self.wirte_log(log_path, "Apply", "Success", "")
-                        break
-                    error_info2 = str(task)
-                    if task["status"] == "COMPLETE":
-                        self.wirte_log(log_path, "Apply", "Success", "")
-                        break
-                    elif task["status"] == "FAILED":
-                        self.wirte_log(log_path, "Apply", "Finish", "Apply(FLASH) failed.")
-                        result.State("Failure")
-                        result.Message(["Apply(FLASH) failed."])
-                        break
-                    elif task["status"] == "CANCELED":
-                        self.wirte_log(log_path, "Apply", "Finish", "Apply(FLASH) canceled.")
-                        result.State("Failure")
-                        result.Message(["Apply(FLASH) canceled."])
-                        break
-                    else:
-                        self.wirte_log(log_path, "Apply", "In Progress",
-                                       "progress:" + str(task["progress"]) + "%")
-                        if str(task["progress"]) == 100:
-                            count_1002 = count_1002 + 1
-
-                else:
-                    error_count2 = error_count2 + 1
-                    error_info2 = str(res_progress.get('data'))
-
-            # 判断第二个bmc apply是否结束
-            if result.State == "Failure" or result.State == "Abort":
-                if image1_update_info == "":
-                    image1_update_info = "BMC image1 update failed: " + result.Message[0]
-                if image2_update_info == "":
-                    image2_update_info = "BMC image2 update failed: " + result.Message[0]
-                result = ResultBean()
-                result.State("Success")
-                result.Message([image1_update_info, image2_update_info])
-                continue
-            # 获取第二个bmc的版本
-            fw_now2 = {}
-            bmcfw_try_count2 = 0
-            bmcfw_error_count2 = 0
-            while True:
-                fw_now2 = {}
-                if bmcfw_try_count2 > 3:
-                    result.State('Failure')
-                    result.Message(["Flash BMC inactive image failed: " + str(res_fw2.get('data'))])
-                    self.wirte_log(log_path, "Activate", "Version Verify Failed", result.Message)
-                    break
-                else:
-                    bmcfw_try_count2 = bmcfw_try_count2 + 1
-                    time.sleep(20)
-                if bmcfw_error_count2 > 3:
-                    result.State('Failure')
-                    result.Message(["Get BMC fw version failed(inactiveBMC): " + str(res_fw2.get('data'))])
-                    self.wirte_log(log_path, "Activate", "Version Verify Failed", result.Message)
-                    break
-
-                res_fw2 = RestFunc.getFwVersion(client)
-                if res_fw2 == {}:
-                    bmcfw_error_count2 = bmcfw_error_count2 + 1
-                elif res_fw2.get('code') == 0 and res_fw2.get('data') is not None:
-                    fwlist2 = res_fw2.get('data')
-                    for fw in fwlist2:
-                        if fw.get('dev_version') == '':
-                            version = "0.00.00"
-                        else:
-                            index_version = fw.get('dev_version', "").find('(')
-                            if index_version == -1:
-                                version = fw.get('dev_version')
-                            else:
-                                version = fw.get('dev_version')[
-                                          :index_version].strip()
-                        if "BMC0" in fw.get("dev_name", ""):
-                            fw_now2["BMC0"] = version
-                            if "Inactivate" in fw.get("dev_name", "") or "Backup" in fw.get("dev_name", ""):
-                                fw_now2["InactivateBMC"] = "BMC0"
-                            else:
-                                fw_now2["ActivateBMC"] = "BMC0"
-                        elif "BMC1" in fw.get("dev_name", ""):
-                            fw_now2["BMC1"] = version
-                            if "Inactivate" in fw.get("dev_name", "") or "Backup" in fw.get("dev_name", ""):
-                                fw_now2["InactivateBMC"] = "BMC1"
-                            else:
-                                fw_now2["ActivateBMC"] = "BMC1"
-                        if "ActivateBMC" in fw_now2 and "InactivateBMC" in fw_now2:
-                            break
-                    if "BMC0" not in fw_now2 and "BMC1" not in fw_now2:
-                        bmcfw_error_count2 = bmcfw_error_count2 + 1
-                        continue
-                    if "ActivateBMC" not in fw_now2 or "InactivateBMC" not in fw_now2:
-                        bmcfw_error_count2 = bmcfw_error_count2 + 1
-                        continue
-                    if fw_now2["BMC0"] == fw_now2["BMC1"]:
-                        break
-                else:
-                    bmcfw_error_count2 = bmcfw_error_count2 + 1
-
-            if result.State == 'Failure':
-                if image1_update_info == "":
-                    image1_update_info = "BMC image1 update failed: " + result.Message[0]
-                if image2_update_info == "":
-                    image2_update_info = "BMC image2 update failed: " + result.Message[0]
-                result = ResultBean()
-                result.State("Success")
-                result.Message([image1_update_info, image2_update_info])
-                continue
-
-            if "ActivateBMC" in fw_old:
-                if fw_old["ActivateBMC"] == "BMC1":
-                    image2_update_info = "BMC update successfully, Version: image2 change from " + fw_old.get("BMC1",
-                                                                                                              "-") + " to " + fw_now2.get(
-                        "BMC1", "-")
-                    image1_update_info = "BMC update successfully, Version: image1 change from " + fw_old.get("BMC0",
-                                                                                                              "-") + " to " + fw_now2.get(
-                        "BMC0", "-")
-                elif fw_old["ActivateBMC"] == "BMC0":
-                    image1_update_info = "BMC update successfully, Version: image1 change from " + fw_old.get("BMC0",
-                                                                                                              "-") + " to " + fw_now2.get(
-                        "BMC0", "-")
-                    image2_update_info = "BMC update successfully, Version: image2 change from " + fw_old.get("BMC1",
-                                                                                                              "-") + " to " + fw_now2.get(
-                        "BMC1", "-")
-
-            self.wirte_log(log_path, "Activate", "Version Verify OK", image1_update_info + image2_update_info)
-
-            result.State("Success")
-            result.Message([image1_update_info, image2_update_info])
-            continue
-
-    def updatebios(self, client, args):
-        result = ResultBean()
-        log_path = args.log_path
-        session_path = args.session_path
-        upgrade_count = 0
-        while True:
-            # 判断session是否存在，存在则logout&del
-            if os.path.exists(session_path):
-                with open(session_path, 'r') as oldsession:
-                    headers = oldsession.read()
-                    headers_json = json.loads(str(headers).replace("'", '"'))
-                    client.setHearder(headers_json)
-                    # logout
-                    RestFunc.logout(client)  # 删除session
-                if os.path.exists(session_path):
-                    os.remove(session_path)
-            # 删除
-            if result.State == "Success":
-                return result
-            elif result.State == "Abort":
-                result.State = "Failure"
-                return result
-            else:
-                if upgrade_count > retry_count:
-                    return result
-                else:
-                    if upgrade_count >= 1:
-                        # 重新升级 初始化result
-                        self.wirte_log(log_path, "Upload File", "Upgrade Retry " + str(upgrade_count) + " Times", "")
-                        result = ResultBean()
-                    upgrade_count = upgrade_count + 1
-            # login
-            headers = {}
-            logcount = 0
-            while True:
-                # 等6分钟
-                if logcount > 18:
-                    break
-                else:
-                    logcount = logcount + 1
-                    time.sleep(20)
-                # login
-                headers = RestFunc.login_M6(client)
-                if headers != {}:
-                    # 记录session
-                    with open(session_path, 'w') as new_session:
-                        new_session.write(str(headers))
-                    client.setHearder(headers)
-                    break
-                else:
-                    self.wirte_log(log_path, "Upload File", "Connect Failed", "Connect number:" + str(logcount))
-            # 10次无法登陆 不再重试
-            if headers == {}:
-                result.State("Failure")
-                result.Message(["Cannot log in to BMC."])
-                return result
-            # get old version
-            fw_res = RestFunc.getFwVersion(client)
-            fw_old = {}
-            if fw_res == {}:
-                self.wirte_log(log_path, "Upload File", "Connect Failed", "Cannot get current firmware version.")
-            elif fw_res.get('code') == 0 and fw_res.get('data') is not None:
-                fwdata = fw_res.get('data')
+        # 获取BMC版本
+        # get old version
+        fw_res = RestFunc.getFwVersion(client)
+        fw_old = {}
+        if fw_res == {}:
+            self.wirte_log(log_path, "Upload File", "Connect Failed", "Cannot get current firmware version.")
+        elif fw_res.get('code') == 0 and fw_res.get('data') is not None:
+            fwdata = fw_res.get('data')
+            if args.type == "BMC":
                 for fw in fwdata:
                     if fw.get('dev_version') == '':
                         version = "-"
@@ -3363,216 +2796,806 @@ class CommonM7(CommonM6):
                             version = fw.get('dev_version')
                         else:
                             version = fw.get('dev_version')[:index_version].strip()
-                    if "BIOS" in fw.get("dev_name", ""):
-                        fw_old["BIOS"] = version
-                if "BIOS" not in fw_old:
-                    version_info = "Cannot get current firmware version, " + str(fwdata)
+                    if "BMC0" in fw.get("dev_name", ""):
+                        fw_old["BMC0"] = version
+                        if "Inactivate" in fw.get("dev_name", ""):
+                            fw_old["InactivateBMC"] = "BMC0"
+                        else:
+                            fw_old["ActivateBMC"] = "BMC0"
+                    elif "BMC1" in fw.get("dev_name", ""):
+                        fw_old["BMC1"] = version
+                        if "Inactivate" in fw.get("dev_name", ""):
+                            fw_old["InactivateBMC"] = "BMC1"
+                        else:
+                            fw_old["ActivateBMC"] = "BMC1"
+
+                if "BMC0" not in fw_old and "BMC1" not in fw_old:
+                    version_info = "Cannot get current BMC version, " + str(fwdata)
                     self.wirte_log(log_path, "Upload File", "Connect Failed", version_info)
             else:
-                version_info = "Cannot get current firmware version, " + str(fw_res.get('data'))
-                self.wirte_log(log_path, "Upload File", "Connect Failed", version_info)
-
-            # BIOS 升级自动重启，先关机
-            if args.mode == "Auto" and self.getServerStatus(client) != "off":
-                choices = {'on': 1, 'off': 0, 'cycle': 2, 'reset': 3, 'shutdown': 5}
-                Power = RestFunc.setM6PowerByRest(client, choices["off"])
-                if Power.get('code') == 0 and Power.get('data') is not None:
-                    off_count = 0
-                    while True:
-                        if self.getServerStatus(client) == "off" or off_count > 5:
-                            break
-                        time.sleep(10)
-                        off_count += 1
-                    if self.getServerStatus(client) != "off":
-                        result.State('Failure')
-                        result.Message(['set power off complete, but get power status error.'])
-                        self.wirte_log(log_path, "Auto Reset Server", "Get Power Status Error", result.Message)
-                        continue
+                for fw in fwdata:
+                    if fw.get('dev_version') == '':
+                        version = "-"
                     else:
-                        self.wirte_log(log_path, "Set Power Off", "Successfully", "")
-                else:
-                    result.State('Failure')
-                    result.Message(['set power off failed.'])
-                    self.wirte_log(log_path, "Auto Reset Server", "Set Power Off Failed", result.Message)
-                    continue
-            # set syn mode
-            res_syn = {}
-            RestFunc.securityCheckByRest(client)
-            if args.type == "BIOS_PFR":
-                res_syn = RestFunc.syncmodePFRByRest(client, args.override, args.mode, args.type, None)
-            else:
-                res_syn = RestFunc.syncmodeByRest(client, args.override, None)
-            if res_syn == {}:
-                result.State("Failure")
-                result.Message(["cannot set syncmode"])
-                self.wirte_log(log_path, "Upload File", "Connect Failed", result.Message)
-                continue
-            elif res_syn.get('code') == 0:
-                self.wirte_log(log_path, "Upload File", "Start", "")
-            else:
-                result.State("Failure")
-                result.Message(["set sync mode error, " + str(res_syn.get('data'))])
-                self.wirte_log(log_path, "Upload File", "Connect Failed", result.Message)
-                continue
+                        index_version = fw.get('dev_version', "").find('(')
+                        if index_version == -1:
+                            version = fw.get('dev_version')
+                        else:
+                            version = fw.get('dev_version')[:index_version].strip()
+                    if "Active" in fw.get("dev_name", ""):
+                        fw_old["ActivateBMC"] = version
+                    elif "Backup" in fw.get("dev_name", ""):
+                        fw_old["InactivateBMC"] = version
 
-            # upload
-            res_upload = RestFunc.uploadfirmwareByRest1(client, args.url)
-            if res_upload == {}:
-                result.State("Failure")
-                result.Message(["cannot upload firmware update file"])
-                self.wirte_log(log_path, "Upload File", "Connect Failed", "Exceptions occurred while calling interface")
-                continue
-            elif res_upload.get('code') == 0:
-                self.wirte_log(log_path, "Upload File", "Success", "")
-            else:
-                result.State("Failure")
-                result.Message(["upload firmware error, " + str(res_upload.get('data'))])
-                if res_upload.get('data', 0) == 1 or res_upload.get('data', 0) == 2:
-                    self.wirte_log(log_path, "Upload File", "File Not Exist", str(res_upload.get('data')))
-                elif res_upload.get('data', 0) == 404:
-                    self.wirte_log(log_path, "Upload File", "Invalid URI", str(res_upload.get('data')))
-                else:
-                    self.wirte_log(log_path, "Upload File", "Connect Failed", str(res_upload.get('data')))
-                continue
+                if "ActivateBMC" not in fw_old and "InactivateBMC" not in fw_old:
+                    version_info = "Cannot get current BMC version, " + str(fwdata)
+                    self.wirte_log(log_path, "Upload File", "Connect Failed", version_info)
 
-            # verify
-            if args.type != "BIOS_PFR":
-                time.sleep(20)
-            self.wirte_log(log_path, "File Verify", "Start", "")
-            res_verify = RestFunc.getverifyresultByRest(client)
-            if res_verify == {}:
-                result.State("Failure")
-                result.Message(["cannot verify firmware update file"])
-                self.wirte_log(log_path, "File Verify", "Connect Failed", "Exceptions occurred while calling interface")
-                continue
-            elif res_verify.get('code') == 0:
-                self.wirte_log(log_path, "File Verify", "Success", "")
-            else:
-                result.State("Failure")
-                result.Message(["cannot verify firmware update file, " + str(res_verify.get('data'))])
-                self.wirte_log(log_path, "File Verify", "Data Verify Failed", str(res_verify.get('data')))
-                continue
+        else:
+            version_info = "Cannot get current firmware version, " + str(fw_res.get('data'))
+            self.wirte_log(log_path, "Upload File", "Connect Failed", version_info)
 
-            # apply
-            task_dict = {"BMC": 0, "BIOS": 1, "PSUFW": 5, "CPLD": 2, "FRONTDISKBPCPLD": 3, "REARDISKBPCPLD": 4,
-                         "BIOS_PFR": 10}
-            if self.getServerStatus(client) != "off":
-                time.sleep(10)
-                res_progress = RestFunc.getTaskInfoByRest(client)
-                if res_progress == {}:
-                    result.State("Failure")
-                    result.Message(["No apply task found in task list. Call interface "
-                                    "api/maintenance/background/task_info returns: " + str(res_progress)])
-                    self.wirte_log(log_path, "Apply", "Image and Target Component Mismatch", result.Message)
-                    continue
-                elif res_progress.get('code') == 0 and res_progress.get('data') is not None:
-                    tasks = res_progress.get('data')
-                    task = None
-                    for t in tasks:
-                        if t["id"] == task_dict.get(args.type, -1):
-                            task = t
-                            break
+        # 调check接口，不管成功与否继续升级
+        # 旧版本BMC无此接口，新版本若check失败仍然可以升级获取进度，但是不会生效
+        RestFunc.securityCheckByRest(client)
+        if args.type == "BMC_PFR":
+            res_syn = RestFunc.syncmodePFRByRest(client, args.override, args.mode, args.type, args.image)
+        else:
+            res_syn = RestFunc.syncmodeByRest(client, args.override, args.mode)
+        if res_syn == {}:
+            result.State("Failure")
+            result.Message(["cannot set syncmode"])
+            self.wirte_log(log_path, "Upload File", "Connect Failed", result.Message)
+            return result
+        elif res_syn.get('code') == 0:
+            self.wirte_log(log_path, "Upload File", "Start", "")
+        else:
+            result.State("Failure")
+            result.Message(["set sync mode error, " + str(res_syn.get('data'))])
+            self.wirte_log(log_path, "Upload File", "Connect Failed", result.Message)
+            return result
+        res_upload = RestFunc.uploadfirmwareByRest1(client, args.url)
+        if res_upload == {}:
+            result.State("Failure")
+            result.Message(["cannot upload firmware update file"])
+            self.wirte_log(log_path, "Upload File", "Connect Failed", "Exceptions occurred while calling interface")
+            return result
+        elif res_upload.get('code') == 0:
+            self.wirte_log(log_path, "Upload File", "Success", "")
+        else:
+            result.State("Failure")
+            result.Message(["upload firmware error, " + str(res_upload.get('data'))])
+            if res_upload.get('data', 0) == 1 or res_upload.get('data', 0) == 2:
+                self.wirte_log(log_path, "Upload File", "File Not Exist", str(res_upload.get('data')))
+            elif res_upload.get('data', 0) == 404:
+                self.wirte_log(log_path, "Upload File", "Invalid URI", str(res_upload.get('data')))
+            else:
+                self.wirte_log(log_path, "Upload File", "Connect Failed", str(res_upload.get('data')))
+            return result
+        # verify
+        if args.type != "BMC_PFR":
+            time.sleep(20)
+        self.wirte_log(log_path, "File Verify", "Start", "")
+        res_verify = RestFunc.getverifyresultByRest(client)
+        if res_verify == {}:
+            result.State("Failure")
+            result.Message(["cannot verify firmware update file"])
+            self.wirte_log(log_path, "File Verify", "Connect Failed", "Exceptions occurred while calling interface")
+            return result
+        elif res_verify.get('code') == 0:
+            self.wirte_log(log_path, "File Verify", "Success", "")
+        else:
+            result.State("Failure")
+            result.Message(["cannot verify firmware update file, " + str(res_verify.get('data'))])
+            self.wirte_log(log_path, "File Verify", "Data Verify Failed", str(res_verify.get('data')))
+            return result
+        # apply
+        task_dict = {"BMC": 0, "BIOS": 1, "PSUFW": 5, "CPLD": 2, "FRONTDISKBPCPLD": 3, "REARDISKBPCPLD": 4,
+                     "BMC_PFR": 10}
+        self.wirte_log(log_path, "Apply", "Start", "")
+        error_count = 0
+        count = 0  # max progress number
+        # 100num  若进度10次都是100 则主动reset
+        count_100 = 0
+        # 循环查看apply进度
+        #开始刷新时间
+        stime = time.time()
+        #上次是否也失败
+        errorflag = False
+        errortime = 0
+        # 循环查看apply进度
+        error_info = ""
+        #bmc 刷新进度 0初始 1刷备用 2平刷完成 3rollback
+        bmcstate = 1
+        while True:
+            ntime = time.time()
+            updatetime = ntime - stime
+            if updatetime > 2000:
+                result.State("Failure")
+                result.Message(["Flash timeout."])
+                self.wirte_log(log_path, "Apply", "Finish", "Flash timeout.")
+                break
+            if error_count > 10:
+                break
+            if count_100 > 5:
+                break
+            time.sleep(10)
+            res_progress = RestFunc.getTaskInfoByRest(client)
+            if res_progress == {}:
+                error_count = error_count + 1
+                error_info = 'Failed to call BMC interface api/maintenance/background/task_info ,response is none'
+            elif res_progress.get('code') == 0 and res_progress.get('data') is not None:
+                tasks = res_progress.get('data')
+                task = None
+                for t in tasks:
+                    if t["id"] == task_dict.get(args.type, -1):
+                        task = t
+                        break
+                        #bmc 卡过之后也许再获取到信息就是rollback了
+                    if "BMC rollback" in t.get("des", "") and args.type == "BMC":
+                        bmcstate = 3
                     # 无任务则退出
                     if task is None:
-                        result.State("Failure")
-                        result.Message(["No apply task found in task list." + str(res_progress)])
-                        self.wirte_log(log_path, "Apply", "Image and Target Component Mismatch", result.Message)
-                        continue
-                    if task["status"] == "FAILED":
-                        result.State("Failure")
-                        result.Message(["Apply task failed." + str(res_progress)])
-                        self.wirte_log(log_path, "Apply", "Data Verify Failed", result.Message)
-                        continue
-
-                    result.State('Success')
-                    result.Message(["Apply(FLASH) pending, host is power on now, image save in BMC FLASH and will "
-                                    "apply later, trigger: poweroff, dcpowercycle, systemreboot. (TaskId=" +
-                                    str(task_dict.get(args.type, 0)) + ")"])
-                    self.wirte_log(log_path, "Apply", "Finish", result.Message)
-                    continue
-                else:
-                    result.State("Failure")
-                    result.Message(["No apply task found in task list." + res_progress])
-                    self.wirte_log(log_path, "Apply", "Image and Target Component Mismatch", result.Message)
-                    continue
-            else:
-                self.wirte_log(log_path, "Apply", "Start", "")
-                # max error number
-                error_count = 0
-                # max progress number
-                count = 0
-                # 100num  若进度10次都是100 则主动reset
-                count_100 = 0
-                # 循环查看apply进度
-                error_info = ""
-                while True:
-                    if count > 60:
-                        break
-                    if error_count > 10:
-                        break
-                    if count_100 > 5:
-                        break
-                    count = count + 1
-                    time.sleep(10)
-                    res_progress = RestFunc.getTaskInfoByRest(client)
-                    if res_progress == {}:
-                        error_count = error_count + 1
-                        error_info = 'Failed to call BMC interface api/maintenance/background/task_info ,response is none'
-                    elif res_progress.get('code') == 0 and res_progress.get('data') is not None:
-                        tasks = res_progress.get('data')
-                        task = None
-                        for t in tasks:
-                            if t["id"] == task_dict.get(args.type, -1):
-                                task = t
-                                break
-                        # 无任务则退出
-                        if task is None:
-                            result.State("Failure")
-                            result.Message(["No apply task found in task list."])
-                            self.wirte_log(log_path, "Apply", "Image and Target Component Mismatch", result.Message)
-                            break
-                        error_info = str(task)
-                        if task["status"] == "COMPLETE":
-                            break
-                        elif task["status"] == "FAILED":
-                            self.wirte_log(log_path, "Apply", "Finish", "Apply(FLASH) failed.")
-                            result.State("Failure")
-                            result.Message(["Apply(FLASH) failed."])
-                            break
-                        elif task["status"] == "CANCELED":
-                            self.wirte_log(log_path, "Apply", "Finish", "Apply(FLASH) canceled.")
-                            result.State("Failure")
-                            result.Message(["Apply(FLASH) canceled."])
+                        #可能已经到了rollback
+                        if bmcstate == 3:
                             break
                         else:
-                            self.wirte_log(log_path, "Apply", "In Progress",
-                                           "progress:" + str(task["progress"]) + "%")
-                            if str(task["progress"]) == 100:
-                                count_100 = count_100 + 1
+                            if updatetime > 60:
+                                #可能已经刷完不需要rollback
+                                #此时 需要判断bmc 两遍版本是否相同
+                                res_fw2 = RestFunc.getFwVersion(client)
+                                if res_fw2.get('code') == 0:
+                                    fw2 = {}
+                                    fwlist2 = res_fw2.get('data')
+                                    for fw in fwlist2:
+                                        if "BMC0" in fw.get("dev_name", ""):
+                                            fw2["BMC0"] = fw.get('dev_version')
+                                        elif "BMC1" in fw.get("dev_name", ""):
+                                            fw2["BMC1"] = fw.get('dev_version')
+                                        if "BMC0" in fw2 and "BMC1" in fw2:
+                                            break
+                                    if fw2["BMC0"] == fw2["BMC1"]:
+                                        bmcstate = 2
+                                        break
+                                    else:
+                                        continue
+
+                            else:
+                                continue
+
+                    result.State("Failure")
+                    result.Message(["No apply task found in task list."])
+                    self.wirte_log(log_path, "Apply", "Image and Target Component Mismatch", result.Message)
+                    break
+                error_info = str(task)
+                if task["status"] == "COMPLETE":
+                    break
+                elif task["status"] == "FAILED":
+                    self.wirte_log(log_path, "Apply", "Finish", "Apply(FLASH) failed.")
+                    result.State("Failure")
+                    result.Message(["Apply(FLASH) failed."])
+                    break
+                elif task["status"] == "CANCELED":
+                    self.wirte_log(log_path, "Apply", "Finish", "Apply(FLASH) canceled.")
+                    result.State("Failure")
+                    result.Message(["Apply(FLASH) canceled."])
+                    break
+                elif task["status"] == "PROCESSING":
+                    self.wirte_log(log_path, "Apply", "In Progress", "progress:" + str(task["progress"]) + "%")
+                    if str(task["progress"]) == 100:
+                        count_100 = count_100 + 1
+                else:
+                    self.wirte_log(log_path, "Apply", "FLASH", "task status: " + str(task["status"]))
+                    result.State("Failure")
+                    result.Message(["Apply(FLASH) failed."])
+            elif res_progress.get('code') == 401:
+                # 401 没有权限不算错，因为bmc还通，这时候登录不上才算失败
+                headers = RestFunc.login_M6(client)
+                if headers != {}:
+                    client.setHearder(headers)
+                else:
+                    if errorflag:
+                        errortime = time.time()
+                        errorflag = False
                     else:
-                        error_count = error_count + 1
-                        error_info = str(res_progress.get('data'))
+                        # 连续5分钟失败则报错退出
+                        if ntime - errortime > 300:
+                            if args.type == "BMC":
+                                continue
+                            else:
+                                result.State("Failure")
+                                result.Message(["Get progress failed. " + str(res_progress.get("data"))])
+                                self.wirte_log(log_path, "Apply", "FLASH", "Get progress failed. " + str(res_progress.get("data")))
+                                break
+            else:
+                if errorflag:
+                    errortime = time.time()
+                    errorflag = False
+                else:
+                    # 连续5分钟失败则报错退出
+                    if ntime - errortime > 300:
+                        if args.type == "BMC":
+                            continue
+                        else:
+                            result.State("Failure")
+                            result.Message(["Get progress failed. " + str(res_progress.get("data"))])
+                            self.wirte_log(log_path, "Apply", "FLASH", "Get progress failed. " + str(res_progress.get("data")))
+                            break
 
-                # 判断apply是否结束
-                if result.State == "Failure":
+        # 判断apply是否结束
+        if result.State == "Failure":
+            return result
+
+        # 获取apply进度结束
+        self.wirte_log(log_path, "Apply", "Success", "")
+
+        if args.mode == "Manual":
+            # manual 需要手动重启bmc
+            result.State('Success')
+            result.Message(["Activate pending, host is power " + self.getServerStatus(
+                client) + " now, image save in BMC FLASH and will apply later, trigger: bmcreboot."])
+            self.wirte_log(log_path, "Activate", "Write to Temporary FLASH Success", "reboot bmc to activate")
+            return result
+
+        # 未结束需要等待重启
+        # 查看bmc activate状态
+        # 并且刷新另一块
+        # 一般4 5分钟即可从备镜像启动成功
+        # 15分钟未启动则升级失败 从备份镜像启动，启动成功需要rollback
+        # 10分钟内启动成功则说明刷新成功
+        self.wirte_log(log_path, "Activate", "Start", "BMC will reboot")
+        time.sleep(360)
+
+        uname = client.username
+        pword = client.passcode
+        # web service 是否启动
+        reset_try_count = 0
+        headers = {}
+        while True:
+            time.sleep(20)
+            reset_try_count = reset_try_count + 1
+            # 10分钟未启动 尝试使用 admin 登陆
+            if reset_try_count == 30:
+                client.username = "admin"
+                client.passcode = "admin"
+            # 使用默认用户admin尝试登陆
+            if reset_try_count > 32:
+                result.State('Failure')
+                result.Message(["Cannot login BMC. Get fw version failed."])
+                self.wirte_log(log_path, "Activate", "BMC Reboot Failed", result.Message)
+                break
+            try:
+                headers = RestFunc.login_M6(client)
+                if headers != {}:
+                    with open(session_path, 'w') as new_session:
+                        new_session.write(str(headers))
+                    break
+            except Exception as e:
+                # print(str(e))
+                continue
+
+        if result.State == 'Failure':
+            client.username = uname
+            client.passcode = pword
+            return result
+
+        client.setHearder(headers)
+
+        # BMC有bug 回滚的时候CPU利用率超高不准 可能出现都不是active的bug
+        # 查看BMC启动的主备
+
+        res_ver = IpmiFunc.getMcInfoByIpmi(client)
+        image1_update_info = ""
+        image2_update_info = ""
+        if 'code' in res_ver and res_ver.get("code", 1) == 0:
+            version_12 = res_ver.get("data").get("firmware_revision")
+            version_3 = int(res_ver.get("data").get("aux_firmware_rev_info").split(";")[0], 16)
+            version_new = version_12 + "." + str(version_3)
+            if args.type == "BMC_PFR":
+                if args.image == "active":
+                    if "ActivateBMC" in fw_old:
+                        image1_update_info = "BMC update successfully, Version: image1 image change from " + \
+                                             fw_old.get("ActivateBMC", "-") + " to " + version_new
+                    else:
+                        image1_update_info = "BMC update successfully, new version: " + version_new
+                else:
+                    if "InactivateBMC" in fw_old:
+                        if fw_old.get("ActivateBMC", "") == "BMC1":
+                            image1_update_info = "BMC update successfully, Version: image1 change from " + \
+                                                 fw_old.get("InactivateBMC", "-") + " to " + version_new
+                        else:
+                            image1_update_info = "BMC update successfully, new version: " + version_new
+            else:
+                if fw_old.get("ActivateBMC", "") == "BMC1":
+                    image1_update_info = "BMC update successfully, Version: image1 change from " + fw_old.get(
+                        "BMC0", "-") + " to " + version_new
+                elif fw_old.get("ActivateBMC", "") == "BMC0":
+                    image2_update_info = "BMC update successfully, Version: image2 change from " + fw_old.get(
+                        "BMC1", "-") + " to " + version_new
+                else:
+                    image1_update_info = "BMC update successfully, new version: " + version_new
+
+            self.wirte_log(log_path, "Activate", "Version Verify OK", image1_update_info + image2_update_info)
+        else:
+            result.State("Failure")
+            result.Message(["Flash image " + fw_old.get("InactivateBMC", "") + " error." + res_ver.get("data", "")])
+            self.wirte_log(log_path, "Activate", "Version Verify Failed", result.Message)
+            return result
+
+        if args.type == "BMC_PFR":
+            result.State("Success")
+            result.Message(["update bmc complete"])
+            return result
+
+        # 校验第二个镜像
+        image_to_set2 = ""
+        if "ActivateBMC" in fw_old:
+            if fw_old["ActivateBMC"] == "BMC1":
+                image_to_set2 = "Image2"
+            elif fw_old["ActivateBMC"] == "BMC0":
+                image_to_set2 = "Image1"
+            self.wirte_log(log_path, "Apply", "Start", "Flash" + image_to_set2)
+        else:
+            self.wirte_log(log_path, "Apply", "Start", "Flash image")
+
+        # max error number
+        error_count2 = 0
+        # max progress number
+        count2 = 0
+        # 100num  若进度10次都是100 则主动reset
+        count_1002 = 0
+        # 循环查看apply进度
+        error_info2 = ""
+        while True:
+            if count2 > 120:
+                result.State("Abort")
+                result.Message([
+                    "Apply cost too much time, please check if upgrade is ok or not. Last response is " + error_info2])
+                self.wirte_log(log_path, "Apply", "Connect Failed", result.Message)
+                break
+            if error_count2 > 10:
+                result.State("Abort")
+                result.Message(
+                    ["Get apply progress error, please check is upgraded or not. Last response is " + error_info2])
+                self.wirte_log(log_path, "Apply", "Connect Failed", result.Message)
+                # check是否升级成功
+                break
+            if count_1002 > 5:
+                result.State("Abort")
+                result.Message([
+                    "Apply progress is 100% but it does not complete, check if upgrade is ok or not. Last response is " + error_info2])
+                self.wirte_log(log_path, "Apply", "In Progress", result.Message)
+                break
+            count2 = count2 + 1
+            time.sleep(10)
+            res_progress = RestFunc.getTaskInfoByRest(client)
+            if res_progress == {}:
+                error_count2 = error_count2 + 1
+                error_info2 = "Failed to call BMC interface api/maintenance/background/task_info ,response is none"
+            elif res_progress.get('code') == 0 and res_progress.get('data') is not None:
+                tasks = res_progress.get('data')
+                task = None
+                for t in tasks:
+                    if t["id"] == task_dict.get(args.type, -1) or "rollback" in t["des"]:
+                        task = t
+                        break
+                # 无任务则退出
+                if task == None:
+                    # 无任务应该是刷的同一版本 无需回滚
+                    self.wirte_log(log_path, "Apply", "Success", "")
+                    break
+                error_info2 = str(task)
+                if task["status"] == "COMPLETE":
+                    self.wirte_log(log_path, "Apply", "Success", "")
+                    break
+                elif task["status"] == "FAILED":
+                    self.wirte_log(log_path, "Apply", "Finish", "Apply(FLASH) failed.")
+                    result.State("Failure")
+                    result.Message(["Apply(FLASH) failed."])
+                    break
+                elif task["status"] == "CANCELED":
+                    self.wirte_log(log_path, "Apply", "Finish", "Apply(FLASH) canceled.")
+                    result.State("Failure")
+                    result.Message(["Apply(FLASH) canceled."])
+                    break
+                else:
+                    self.wirte_log(log_path, "Apply", "In Progress",
+                                   "progress:" + str(task["progress"]) + "%")
+                    if str(task["progress"]) == 100:
+                        count_1002 = count_1002 + 1
+
+            else:
+                error_count2 = error_count2 + 1
+                error_info2 = str(res_progress.get('data'))
+
+        # 判断第二个bmc apply是否结束
+        if result.State == "Failure" or result.State == "Abort":
+            if image1_update_info == "":
+                image1_update_info = "BMC image1 update failed: " + result.Message[0]
+            if image2_update_info == "":
+                image2_update_info = "BMC image2 update failed: " + result.Message[0]
+            result = ResultBean()
+            result.State("Success")
+            result.Message([image1_update_info, image2_update_info])
+            return result
+        # 获取第二个bmc的版本
+        fw_now2 = {}
+        bmcfw_try_count2 = 0
+        bmcfw_error_count2 = 0
+        while True:
+            fw_now2 = {}
+            if bmcfw_try_count2 > 3:
+                result.State('Failure')
+                result.Message(["Flash BMC inactive image failed: " + str(res_fw2.get('data'))])
+                self.wirte_log(log_path, "Activate", "Version Verify Failed", result.Message)
+                break
+            else:
+                bmcfw_try_count2 = bmcfw_try_count2 + 1
+                time.sleep(20)
+            if bmcfw_error_count2 > 3:
+                result.State('Failure')
+                result.Message(["Get BMC fw version failed(inactiveBMC): " + str(res_fw2.get('data'))])
+                self.wirte_log(log_path, "Activate", "Version Verify Failed", result.Message)
+                break
+
+            res_fw2 = RestFunc.getFwVersion(client)
+            if res_fw2 == {}:
+                bmcfw_error_count2 = bmcfw_error_count2 + 1
+            elif res_fw2.get('code') == 0 and res_fw2.get('data') is not None:
+                fwlist2 = res_fw2.get('data')
+                for fw in fwlist2:
+                    if fw.get('dev_version') == '':
+                        version = "0.00.00"
+                    else:
+                        index_version = fw.get('dev_version', "").find('(')
+                        if index_version == -1:
+                            version = fw.get('dev_version')
+                        else:
+                            version = fw.get('dev_version')[
+                                      :index_version].strip()
+                    if "BMC0" in fw.get("dev_name", ""):
+                        fw_now2["BMC0"] = version
+                        if "Inactivate" in fw.get("dev_name", "") or "Backup" in fw.get("dev_name", ""):
+                            fw_now2["InactivateBMC"] = "BMC0"
+                        else:
+                            fw_now2["ActivateBMC"] = "BMC0"
+                    elif "BMC1" in fw.get("dev_name", ""):
+                        fw_now2["BMC1"] = version
+                        if "Inactivate" in fw.get("dev_name", "") or "Backup" in fw.get("dev_name", ""):
+                            fw_now2["InactivateBMC"] = "BMC1"
+                        else:
+                            fw_now2["ActivateBMC"] = "BMC1"
+                    if "ActivateBMC" in fw_now2 and "InactivateBMC" in fw_now2:
+                        break
+                if "BMC0" not in fw_now2 and "BMC1" not in fw_now2:
+                    bmcfw_error_count2 = bmcfw_error_count2 + 1
+                    continue
+                if "ActivateBMC" not in fw_now2 or "InactivateBMC" not in fw_now2:
+                    bmcfw_error_count2 = bmcfw_error_count2 + 1
+                    continue
+                if fw_now2["BMC0"] == fw_now2["BMC1"]:
+                    break
+            else:
+                bmcfw_error_count2 = bmcfw_error_count2 + 1
+
+        if result.State == 'Failure':
+            if image1_update_info == "":
+                image1_update_info = "BMC image1 update failed: " + result.Message[0]
+            if image2_update_info == "":
+                image2_update_info = "BMC image2 update failed: " + result.Message[0]
+            result = ResultBean()
+            result.State("Success")
+            result.Message([image1_update_info, image2_update_info])
+            return result
+
+        if "ActivateBMC" in fw_old:
+            if fw_old["ActivateBMC"] == "BMC1":
+                image2_update_info = "BMC update successfully, Version: image2 change from "\
+                                     + fw_old.get("BMC1", "-") + " to " + fw_now2.get("BMC1", "-")
+                image1_update_info = "BMC update successfully, Version: image1 change from "\
+                                     + fw_old.get("BMC0", "-") + " to " + fw_now2.get("BMC0", "-")
+            elif fw_old["ActivateBMC"] == "BMC0":
+                image1_update_info = "BMC update successfully, Version: image1 change from "\
+                                     + fw_old.get("BMC0", "-") + " to " + fw_now2.get("BMC0", "-")
+                image2_update_info = "BMC update successfully, Version: image2 change from "\
+                                     + fw_old.get("BMC1", "-") + " to " + fw_now2.get("BMC1", "-")
+
+        self.wirte_log(log_path, "Activate", "Version Verify OK", image1_update_info + image2_update_info)
+
+        result.State("Success")
+        result.Message([image1_update_info, image2_update_info])
+        return result
+
+    def updatebios(self, client, args):
+        result = ResultBean()
+        log_path = args.log_path
+        # login
+        headers = {}
+        logcount = 0
+        while True:
+            # 重试三次
+            if logcount > 2:
+                break
+            else:
+                logcount = logcount + 1
+                time.sleep(20)
+            # login
+            headers = RestFunc.login_M6(client)
+            if headers != {}:
+                client.setHearder(headers)
+                break
+            else:
+                self.wirte_log(log_path, "Upload File", "Login Failed", "Connect number:" + str(logcount))
+        # 3次无法登陆 不再重试
+        if headers == {}:
+            result.State("Failure")
+            result.Message(["Login retry more times, Cannot log in to BMC"])
+            return result
+
+        # get old version
+        fw_res = RestFunc.getFwVersion(client)
+        fw_old = {}
+        if fw_res == {}:
+            self.wirte_log(log_path, "Upload File", "Connect Failed", "Cannot get current firmware version.")
+        elif fw_res.get('code') == 0 and fw_res.get('data') is not None:
+            fwdata = fw_res.get('data')
+            for fw in fwdata:
+                if fw.get('dev_version') == '':
+                    version = "-"
+                else:
+                    index_version = fw.get('dev_version', "").find('(')
+                    if index_version == -1:
+                        version = fw.get('dev_version')
+                    else:
+                        version = fw.get('dev_version')[:index_version].strip()
+                if "BIOS" in fw.get("dev_name", ""):
+                    fw_old["BIOS"] = version
+            if  not "BIOS" in fw_old:
+                self.wirte_log(log_path, "Upload File", "Connect Failed", "Cannot get current firmware version, " + str(fwdata))
+        else:
+            version_info = "Cannot get current firmware version, " + str(fw_res.get('data'))
+            self.wirte_log(log_path, "Upload File", "Connect Failed", version_info)
+
+
+        #设置升级镜像
+
+        setres = RestFunc.setBiosImage(client, 2)
+        if setres.get("code") != 0:
+            self.wirte_log(log_path, "Upload File", "Connect Failed", "set flash image failed." + setres.get("data"))
+
+        # set syn mode
+        res_syn = {}
+        RestFunc.securityCheckByRest(client)
+        if args.type == "BIOS_PFR":
+            res_syn = RestFunc.syncmodePFRByRest(client, args.override, args.mode, args.type, None)
+        else:
+            res_syn = RestFunc.syncmodeByRest(client, args.override, None)
+        if res_syn == {}:
+            result.State("Failure")
+            result.Message(["cannot set syncmode"])
+            self.wirte_log(log_path, "Upload File", "Connect Failed", "cannot set syncmode")
+            return result
+        elif res_syn.get('code') == 0:
+            self.wirte_log(log_path, "Upload File", "Start", "")
+        else:
+            result.State("Failure")
+            result.Message(["set sync mode error, " + str(res_syn.get('data'))])
+            self.wirte_log(log_path, "Upload File", "Connect Failed", str(result.Message[0]))
+            return result
+
+        # upload
+        res_upload = RestFunc.uploadfirmwareByRest1(client, args.url)
+        if res_upload == {}:
+            result.State("Failure")
+            result.Message(["cannot upload firmware update file"])
+            self.wirte_log(log_path, "Upload File", "Connect Failed", "cannot upload firmware update file")
+            return result
+        elif res_upload.get('code') == 0:
+            self.wirte_log(log_path, "Upload File", "Success", "")
+        else:
+            result.State("Failure")
+            result.Message(["upload firmware error, " + str(res_upload.get('data'))])
+            self.wirte_log(log_path, "Upload File", "Connect Failed", str(result.Message[0]))
+            return result
+
+        # verify
+        if args.type != "BIOS_PFR":
+            time.sleep(20)
+        self.wirte_log(log_path, "File Verify", "Start", "")
+        res_verify = RestFunc.getverifyresultByRest(client)
+        if res_verify == {}:
+            result.State("Failure")
+            result.Message(["cannot verify firmware update file"])
+            self.wirte_log(log_path, "File Verify", "Connect Failed",
+                          "Exceptions occurred while calling interface")
+            return result
+        elif res_verify.get('code') == 0:
+            self.wirte_log(log_path, "File Verify", "Success", "")
+        else:
+            result.State("Failure")
+            result.Message(["cannot verify firmware update file, " + str(res_verify.get('data'))])
+            self.wirte_log(log_path, "File Verify", "Connect Failed", str(result.Message[0]))
+            return result
+
+        # apply
+        task_dict = {"BMC": 0, "BIOS": 1, "PSUFW": 5, "CPLD": 2, "FRONTDISKBPCPLD": 3, "REARDISKBPCPLD": 4,
+                     "BIOS_PFR": 10}
+
+        #检查任务是否生成
+        task = None
+        time0 = time.time()
+        while True:
+            time.sleep(10)
+            timeout_time = time.time()
+
+            res_progress = RestFunc.getTaskInfoByRest(client)
+            if res_progress.get('code') == 0:
+                tasks = res_progress.get('data')
+                for t in tasks:
+                    if t["id"] == task_dict.get(args.type, -1):
+                        task = t
+                        break
+                # 60s 无任务 生成则退出
+                if task is None:
+                    if timeout_time - time0 > 60:
+                        result.State("Failure")
+                        result.Message(["No apply task found in task list." + str(res_progress)])
+                        self.wirte_log(log_path, "Apply", "Task", str(result.Message[0]))
+                        return result
+                    else:
+                        continue
+                else:
+                    break
+            else:
+                # 60s 无法获取任务退出
+                if timeout_time - time0 > 60:
+                    result.State("Failure")
+                    result.Message(["No apply task found in task list." + res_progress])
+                    self.wirte_log(log_path, "Apply", "Task", str(result.Message[0]))
+                    return result
+                else:
                     continue
 
-                # 获取apply进度结束
-                self.wirte_log(log_path, "Apply", "Success", "")
+        if task.get("status") == "FAILED":
+            result.State("Failure")
+            result.Message(["Apply task failed."])
+            self.wirte_log(log_path, "Apply", "Task", str(result.Message[0]))
+            return result
 
-                if args.type == "BIOS" or args.mode == "Manual":
+        pendingflag = False
+        trigger = ""
+        fwtrigger = task.get("trigger", "")
+        if self.getServerStatus(client) != "off":
+            pendingflag = True
+            trigger = "cycle"
+        else:
+            pendingflag = False
+            trigger = "on"
+        #not start
+        if pendingflag and task.get("status") == "NOT_STARTED":
+            if args.auto_flag == 0:
+                result.State('Success')
+                result.Message(["Apply(FLASH) pending, host is power on now, image save in BMC FLASH and will "
+                                "apply later, trigger: " + trigger + ". (TaskId=" +
+                                str(task_dict.get(args.type, 0)) + ")"])
+                self.wirte_log(log_path, "Apply", "Task", str(result.Message[0]))
+                return result
+            else:
+                Power = IpmiFunc.powerControlByIpmi(client, trigger)
+                if Power.get('code') == 0 and Power.get('data') is not None:
+                    time.sleep(10)
+                else:
                     result.State('Success')
-                    result.Message([
-                        "Activate pending, host is power off now, BIOS will activate later, trigger: power on."])
-                    self.wirte_log(log_path, "Apply", "Write to Temporary FLASH Success", result.Message)
+                    result.Message(["Update BIOS complete. But system auto power" + trigger
+                                    + " failed, please power " + trigger + " manually"])
+                    self.wirte_log(log_path, "Apply", "Task", "Success")
+                    return result
 
-                # 判断apply是否结束
-                if result.State == "Failure" or result.State == "Success":
+        self.wirte_log(log_path, "Apply", "Start", "")
+        time1 = time.time()
+        #连续6次获取失败则退出
+        error_count = 0
+        while True:
+            time.sleep(10)
+            timeout_time = time.time()
+            res_progress = RestFunc.getTaskInfoByRest(client)
+            if res_progress.get('code') == 0:
+                tasks = res_progress.get('data')
+                for t in tasks:
+                    if t["id"] == task_dict.get(args.type, -1):
+                        task = t
+                        break
+                #连续3次获取失败则退出
+                if task is None:
+                    if error_count > 2:
+                        result.State("Failure")
+                        result.Message(["No apply task found in task list." + str(res_progress)])
+                        self.wirte_log(log_path, "Apply", "Flash", str(result.Message[0]))
+                        return result
+                    else:
+                        continue
+                else:
+                    error_count = 0
+                    if task.get("status") == "COMPLETE":
+                        break
+                    elif task.get("status") == "FAILED":
+                        result.State("Failure")
+                        result.Message(["Apply(FLASH) failed."])
+                        self.wirte_log(log_path, "Apply", "Flash", str(result.Message[0]))
+                        return result
+                    elif task.get("status") == "CANCELED":
+                        result.State("Failure")
+                        result.Message(["Apply(FLASH) canceled."])
+                        self.wirte_log(log_path, "Apply", "Flash", str(result.Message[0]))
+                        return result
+                    elif task.get("status") == "PROCESSING":
+                        pro = self.ftime() + "Apply(Flash) inprogress, progress: " + str(task["progress"]) + "%"
+                        b_num = len(pro)
+                        self.wirte_log(log_path, "Apply", "Flash",
+                                       "Apply(Flash) inprogress, progress: " + str(task["progress"]) + "%")
+                        if task["progress"] == 100:
+                            count_100 = count_100 + 1
+                    else:
+                        result.State("Failure")
+                        result.Message(["Apply(FLASH) failed."])
+                        self.wirte_log(log_path, "Apply", "Flash",
+                                       "Apply(FLASH) failed, task status: " + str(task.get("status")))
+                        return result
+
+            else:
+                error_count = error_count + 1
+                #连续6次获取失败则退出
+                if error_count > 5:
+                    result.State("Failure")
+                    result.Message(["Cannot get tasks." + str(res_progress.get("data", ""))])
+                    self.wirte_log(log_path, "Apply", "Flash", str(result.Message[0]))
+                    return result
+                else:
                     continue
+        # 获取apply进度结束
+        self.wirte_log(log_path, "Apply", "Flash", "Success")
 
+        if args.type == "BIOS":
+            if args.auto_flag == 0:
+                result.State('Success')
+                result.Message([
+                    "Activate pending, host is power off now, BIOS will activate later, trigger: power on."])
+                self.wirte_log(log_path, "Apply", "Success", str(result.Message[0]))
+                return result
+            else:
+                if pendingflag:
+                    #已经触发过开机
+                    result.State('Success')
+                    result.Message(['Update BIOS complete.'])
+                    self.wirte_log(log_path, "Apply", "Success", str(result.Message[0]))
+                    return result
+
+                else:
+                    args.state = trigger
+                    pcres = self.powercontrol(client, args)
+                    if pcres.State == 'Success':
+                        result.State('Success')
+                        result.Message(['Update BIOS complete, system auto power ' + trigger + ' success'])
+                        self.wirte_log(log_path, "Apply", "Success", str(result.Message[0]))
+                        return result
+                    else:
+                        result.State('Success')
+                        result.Message(["Update BIOS complete. But system auto power" + trigger
+                                        + " failed, please power " + trigger + " manually"])
+                        self.wirte_log(log_path, "Apply", "Success", str(result.Message[0]))
+                        return result
+
+        else:
+            if args.auto_flag == 0:
+                result.State('Success')
+                result.Message([
+                    "Activate pending, host is power off now, BIOS will activate later, trigger: power on."])
+                self.wirte_log(log_path, "Apply", "Success", str(result.Message[0]))
+                return result
+            else:
                 # PFR BIOS刷新会重启BMC，自动重启时等待BMC重启后再执行开机命令
-                self.wirte_log(log_path, "Activate", "Start", "BMC will reboot")
-                time.sleep(360)
+                self.wirte_log(log_path, "Apply", "Flash", "BMC will reboot")
+                time.sleep(180)
 
                 uname = client.username
                 pword = client.passcode
@@ -3590,13 +3613,12 @@ class CommonM7(CommonM6):
                     if reset_try_count > 32:
                         result.State('Failure')
                         result.Message(["Cannot login BMC. Set power on failed, please check server manually"])
-                        self.wirte_log(log_path, "Reboot", "BMC Reboot Failed", result.Message)
+                        self.wirte_log(log_path, "Apply", "Flash", str(result.Message[0]))
                         break
                     try:
                         headers = RestFunc.login_M6(client)
                         if headers != {}:
-                            with open(session_path, 'w') as new_session:
-                                new_session.write(str(headers))
+                            client.setHearder(headers)
                             break
                     except:
                         continue
@@ -3604,29 +3626,24 @@ class CommonM7(CommonM6):
                 if result.State == 'Failure':
                     client.username = uname
                     client.passcode = pword
-                    continue
+                    return result
 
-                client.setHearder(headers)
-
-                ctr_info = IpmiFunc.powerControlByIpmi(client, "on")
+                ctr_info = IpmiFunc.powerControlByIpmi(client, "cycle")
                 if ctr_info:
                     if ctr_info.get('code') == 0 and ctr_info.get('data') is not None and ctr_info.get('data').get(
-                            'status') is not None:
+                            'result') is not None:
                         result.State("Success")
-                        result.Message(["Set power on success"])
-                        self.wirte_log(log_path, "Restart", "Set power on success", result.Message)
+                        result.Message(["Set power cycle success"])
+                        self.wirte_log(log_path, "Apply", "Success", str(result.Message[0]))
                     else:
                         result.State("Failure")
                         result.Message(['set power failed: ' + ctr_info.get('data', ' ')])
-                        self.wirte_log(log_path, "Restart", "Set power on failed", result.Message)
+                        self.wirte_log(log_path, "Apply", "Failure", str(result.Message[0]))
                 else:
                     result.State("Failure")
-                    result.Message(['set power failed.please check server manually'])
-                    self.wirte_log(log_path, "Restart", "Set power on failed", result.Message)
-
-                # 判断reboot是否结束
-                if result.State == "Failure" or result.State == "Success":
-                    continue
+                    result.Message(['set power failed.'])
+                    self.wirte_log(log_path, "Apply", "Failure", "Set power on failed, please check server manually")
+                return result
 
     def updatecpld(self, client, args):
         args.type = None
@@ -5806,7 +5823,6 @@ def addLogicalDisk(client, args, pds, ctrl_id_name_dict):
         result.Message(['create virtual drive failed, ' + str(res.get('data'))])
     return result
 
-
 # Ascii转十六进制
 def ascii2hex(data, length):
     count = length - len(data)
@@ -5816,7 +5832,6 @@ def ascii2hex(data, length):
     data = ' '.join(list_h) + ' 0x00' * count
     return data
 
-
 # 十六进制字符串逆序
 def hexReverse(data):
     pattern = re.compile('.{2}')
@@ -5824,4 +5839,3 @@ def hexReverse(data):
     seq = time_hex.split(' ')[::-1]
     data = '0x' + ' 0x'.join(seq)
     return data
-
