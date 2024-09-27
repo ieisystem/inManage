@@ -237,7 +237,10 @@ setbmclogcfg = {
     'server_addr': 'serverAddr',
     'server_port': 'serverPort',
     'log_type': 'logType',
+}
 
+setSystemLockdownMode = {
+    'lock_status': 'status',
 }
 
 def getParam(dictobj):

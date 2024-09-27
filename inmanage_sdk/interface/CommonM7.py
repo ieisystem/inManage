@@ -5169,12 +5169,15 @@ class CommonM7(CommonM6):
         result = RestFunc.getSystemLockdownMode(client)
         if result.get('code') == 0 and result.get('data') is not None:
             status_dict = {
-                0: "Close",
-                1: "Open"
+                0: "close",
+                1: "open"
             }
             status = status_dict.get(result['data'].get('lock_status', -1), 'Unknown')
+            data = {
+                "lock_status": status
+            }
             res.State('Success')
-            res.Message(status)
+            res.Message(data)
         else:
             res.State("Failure")
             res.Message(result.get('data'))
