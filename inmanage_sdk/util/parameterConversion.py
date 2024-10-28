@@ -278,6 +278,7 @@ def getParam(dictobj):
         'setsmtpcom': setsmtpcom,
         'setsmtpdest': setsmtpdest,
         'setbmclogcfg': setbmclogcfg,
+        'setSystemLockdownMode': setSystemLockdownMode,
     }
     if 'subcommand' in dictobj:
         subcommand = dictobj['subcommand']
