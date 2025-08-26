@@ -76,7 +76,13 @@ class configUtil():
         yaml1 = open(modelRoute)
         content = yaml.load(yaml1, Loader=yaml.BaseLoader)
         yaml1.close()
-        return list(content.keys())
+        ks_list = []
+        for key in content.keys():
+            values = content.get(key)
+            for value in values:
+                if "KR" in value:
+                    ks_list.append(value)
+        return list(ks_list)
 
     # xmlfilepath 文件路径
     def getSetOption(self, xmlfilepath):
