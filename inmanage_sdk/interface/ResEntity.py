@@ -10,6 +10,20 @@ class ResultBean():
     # def __init__(self):
     #     self.Result = collections.OrderedDict()
 
+    @classmethod
+    def fail(cls, message, state=False):
+        obj = cls()
+        obj.Message = message
+        obj.State = state
+        return obj
+
+    @classmethod
+    def success(cls, message, state=True):
+        obj = cls()
+        obj.Message = message
+        obj.State = state
+        return obj
+
     def State(self):
         return self.State
 

@@ -5378,6 +5378,7 @@ class CommonM7(CommonM6):
         RestFunc.logout(client)
         return result
 
+
     def getbootimage(self, client, args):
         result = ResultBean()
         result.State("Not Support")
@@ -5427,18 +5428,6 @@ class CommonM7(CommonM6):
         return result
 
     def clearsystemlog(self, client, args):
-        result = ResultBean()
-        result.State("Not Support")
-        result.Message(['The M7 model does not support this feature.'])
-        return result
-
-    def setnetworkbond(self, client, args):
-        result = ResultBean()
-        result.State("Not Support")
-        result.Message(['The M7 model does not support this feature.'])
-        return result
-
-    def getnetworkbond(self, client, args):
         result = ResultBean()
         result.State("Not Support")
         result.Message(['The M7 model does not support this feature.'])

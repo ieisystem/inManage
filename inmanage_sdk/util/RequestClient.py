@@ -36,6 +36,7 @@ class RequestClient():
         self.etag = ''
         self.headerhost = None
         self.auth = None
+        self.header = {}
 
     def setself(self, host, username, password, type, port=623, lantype="lanplus"):
         """
@@ -103,6 +104,8 @@ class RequestClient():
                 url = r'http://%s/%s' % (self.host, resource)
         else:
         """
+        if str(resource).startswith('/'):
+            resource = resource[1:]
         if self.restport is not None:
             url = r'https://%s:%d/%s' % (self.resthost,
                                          int(self.restport), resource)
@@ -121,18 +124,18 @@ class RequestClient():
                     files=files,
                     headers=headers,
                     json=json,
-                    auth=self.auth,
+                    auth=auth,
                     verify=False,
                     timeout=timeout)
             elif method == 'GET':
                 r = requests.get(url, data=data, headers=headers,
-                                 auth=self.auth, verify=False, timeout=timeout)
+                                 auth=auth, verify=False, timeout=timeout)
             elif method == 'DELETE':
                 r = requests.delete(
                     url,
                     data=data,
                     headers=headers,
-                    auth=self.auth,
+                    auth=auth,
                     verify=False,
                     json=json,
                     timeout=timeout)
@@ -141,7 +144,7 @@ class RequestClient():
                     url,
                     data=data,
                     headers=headers,
-                    auth=self.auth,
+                    auth=auth,
                     verify=False,
                     json=json,
                     timeout=timeout)
@@ -150,14 +153,14 @@ class RequestClient():
                     url,
                     data=data,
                     headers=headers,
-                    auth=self.auth,
+                    auth=auth,
                     verify=False,
                     json=json,
                     timeout=timeout)
             elif method == 'FILE':
                 # print('file',headers)
                 r = requests.post(
-                    url, files=files, headers=headers, verify=False)
+                    url, files=files, headers=headers, auth=auth, verify=False)
             else:
                 r = requests.models.Response()
                 r.status_code = 1500
@@ -176,28 +179,4 @@ class RequestClient():
                 str_error = '{"code":1500,"error":"' + str(e) + '"}'
                 r._content = str_error.encode()
 
-        # log
-        res_info = "[" + method + "] " + url + ":"
-        if method == 'PUT' or method == 'POST':
-            if data is not None:
-                if isinstance(data, dict):
-                    if "password" in data:
-                        data["password"] = "-"
-                    res_info = res_info + " [DATA] " + str(data)
-                else:
-                    res_info = res_info + " [DATA] " + str(type(data))
-            if json is not None:
-                res_info = res_info + " [JSON] " + str(json)
-        if r is None:
-            pass
-        elif r.status_code == 200:
-            try:
-                res_info = res_info + " [RES] " + str(r.json())
-            except BaseException:
-                res_info = res_info
-        else:
-            try:
-                res_info = res_info + " [RES] " + str(r.json())
-            except BaseException:
-                res_info = res_info
         return r

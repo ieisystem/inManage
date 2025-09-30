@@ -102,6 +102,16 @@ def checkBMCZone(bmczone_raw):
     else:
         return 1
 
+def checkRawZone(z):
+    p1 = '^((\-?(([0-9]|10|11)(\.5)?|12)|12(\.5)?|13(\.5)?)|14)$'
+    p2 = '^((\-?(([0-9]|10|11|12))|12?|13?)|14)$'
+    if re.search(p1, z, re.I):
+        if re.search(p2, z, re.I):
+            return 1  # 整点
+        else:
+            return 2  # 半点
+    else:
+        return 0  # 不符合
 
 def checkSubnetPrefixLength(spl):
     try:

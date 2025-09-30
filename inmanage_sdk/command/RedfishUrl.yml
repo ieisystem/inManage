@@ -1,0 +1,375 @@
+CommonM8:
+  getoverview:
+    method: 'GET'
+    url: 'redfish/v1/OemService/Overview'
+  getboards:
+    method: 'GET'
+    url: 'redfish/v1/Chassis/1/Boards'
+  getchassis:
+    method: 'GET'
+    url: 'redfish/v1/Chassis/1'
+  setchassis:
+    method: 'PATCH'
+    url: 'redfish/v1/Chassis/1'
+  manualscreenshot:
+    method:
+    - 'POST'
+    - 'GET'
+    - 'DELETE'
+    url:
+    - 'redfish/v1/Systems/1/Oem/Public/KVM/Actions/ManualCapture'
+    - 'redfish/v1/Systems/1/Oem/Public/KVM/ScreenShot/ManualCapture'
+    - 'redfish/v1/Systems/1/Oem/Public/KVM/ScreenShot/ManualCapture'
+  getuserrule:
+    method: 'GET'
+    url: 'redfish/v1/AccountService'
+  setuserrule:
+    method: 'PATCH'
+    url: 'redfish/v1/AccountService'
+  setscreen:
+    method: 'PATCH'
+    url: 'redfish/v1/Systems/1/Oem/Public/KVM'
+  getscreen:
+    method: 'GET'
+    url: 'redfish/v1/Systems/1/Oem/Public/KVM'
+  getcurrentalarms:
+    method: 'GET'
+    url: 'redfish/v1/Managers/1/LogServices/Alarms/Entries'
+  getservice:
+    method: 'GET'
+    url: 'redfish/v1/Managers/1/NetworkProtocol'
+  setservice:
+    method: 'PATCH'
+    url: 'redfish/v1/Managers/1/NetworkProtocol'
+  getbootcode:
+    method: 'GET'
+    url: 'redfish/v1/Systems/1/HostPostCode'
+  getharddisk:
+    method: 'GET'
+    url: 'redfish/v1/Chassis/1/Drives'
+  getipmistatus:
+    method: 'GET'
+    url: 'redfish/v1/Managers/1/NetworkProtocol'
+  setipmistatus:
+    method: 'PATCH'
+    url: 'redfish/v1/Managers/1/NetworkProtocol'
+  getcpu:
+    method: 'GET'
+    url: 'redfish/v1/Systems/1/Processors'
+    function: ~  # ~表示None
+  getgpu:
+    method: 'GET'
+    url: 'redfish/v1/Systems/1/Processors'
+  gethba:
+    method: 'GET'
+    url: 'redfish/v1/Systems/1/FabricAdapters'
+  getuser:
+    method: 'GET'
+    url: 'redfish/v1/AccountService/Accounts'
+  adduser:
+    method: 'POST'
+    url: 'redfish/v1/AccountService/Accounts'
+  setuser:
+    method: 'PATCH'
+    url: 'redfish/v1/AccountService/Accounts/'
+  deluser:
+    method: 'DELETE'
+    url: 'redfish/v1/AccountService/Accounts'
+  getfan:
+    method: 'GET'
+    url: 'redfish/v1/Chassis/1/Thermal'
+  setfan:
+    method: 'PATCH'
+    url: 'redfish/v1/Chassis/1/Thermal'
+  getfru:
+    method: 'GET'
+    url: 'redfish/v1/Systems/1/Oem/Public/FRU'
+  getsysteminfo:
+    method: 'GET'
+    url: 'redfish/v1/Systems/1'
+  setsysteminfo:
+    method: 'PATCH'
+    url: 'redfish/v1/Systems/1'
+  powercontrol:
+    method: 'POST'
+    url: 'redfish/v1/Chassis/1/Actions/Chassis.Reset'
+  getmemory:
+    method: 'GET'
+    url: 'redfish/v1/Systems/1/Memory'
+  getbackplane:
+    method: 'GET'
+    url: "redfish/v1/Chassis/1/Backplanes"
+  getpsu:
+    method: 'GET'
+    url: 'redfish/v1/Chassis/1/Power'
+  getnetwork:
+    method: 'GET'
+    url: 'redfish/v1/Managers/1/EthernetInterfaces'
+  getphysicaldrive:
+    method:
+      - 'GET'
+    url:
+      - 'redfish/v1/Systems/1/Storage'
+  getsnmp:
+    method: 'GET'
+    url: 'redfish/v1/Managers/1/SnmpService'
+  setsnmp:
+    method: 'PATCH'
+    url: 'redfish/v1/Managers/1/SnmpService'
+  testsnmp:
+    method: 'POST'
+    url: 'redfish/v1/Managers/1/SnmpService/Actions/SnmpService.SubmitTestEvent'
+  gettrap:
+    method: 'GET'
+    url: 'redfish/v1/Managers/1/SnmpService'
+  settrap:
+    method: 'PATCH'
+    url: 'redfish/v1/Managers/1/SnmpService'
+  getbmclogsettings:
+    method: 'GET'
+    url: 'redfish/v1/Managers/1/SyslogService'
+  setbmclogsettings:
+    method: 'PATCH'
+    url: 'redfish/v1/Managers/1/SyslogService'
+  sendbmcsyslogtest:
+    method: 'POST'
+    url: 'redfish/v1/Managers/1/SyslogService/Actions/SyslogService.SubmitTestEvent'
+  getfw:
+    method: 'GET'
+    url: "redfish/v1/UpdateService/FirmwareInventory"
+  getpcie:
+    method: 'GET'
+    url: "redfish/v1/Chassis/1/PCIeDevices"
+  gettime:
+    method:
+      - 'GET'
+      - 'GET'
+    url:
+      - 'redfish/v1/Managers/1'
+      - 'redfish/v1/Managers/1/NtpService'
+  setntp:
+    method:
+      - [ ]
+      - 'GET'
+      - 'GET'
+    url:
+      - [ ]
+      - 'redfish/v1/Managers/1'
+      - 'redfish/v1/Managers/1/NtpService'
+  getmanagers:
+    method: 'GET'
+    url: 'redfish/v1/Managers/1'
+  getntpservice:
+    method: 'GET'
+    url: 'redfish/v1/Managers/1/NtpService'
+  get_onekey_process:
+    method: "GET"
+    url: "redfish/v1/TaskService/Tasks/99"
+  onekey_collect:
+    method: "POST"
+    url: "redfish/v1/Managers/1/LogServices/Actions/Oem/Public/CollectAllLog"
+  onekey_download:
+    method: "POST"
+    url: "redfish/v1/Managers/1/LogServices/Actions/Oem/Public/DownloadAllLog"
+  gettemp:
+    method:
+      - 'GET'
+    url:
+      - 'redfish/v1/Chassis/1/Thermal'
+  getvolt:
+    method:
+      - 'GET'
+    url:
+      - 'redfish/v1/Chassis/1/Power'
+  getsensor:
+    method:
+      - 'GET'
+      - 'GET'
+    url:
+      - 'redfish/v1/Chassis/1/ThresholdSensors'
+      - 'redfish/v1/Chassis/1/DiscreteSensors'
+  getnic:
+    method: 'GET'
+    url: 'redfish/v1/Chassis/1/NetworkAdapters'
+  getmediaredirection:
+    method: 'GET'
+    url: 'redfish/v1/Managers/1/VirtualMedia/CD'
+  getconnectmedia:
+    method: 'GET'
+    url: 'redfish/v1/Managers/1/VirtualMedia/CD'
+  insertvm:
+    method: 'POST'
+    url: 'redfish/v1/Managers/1/VirtualMedia/CD/Actions/VirtualMedia.InsertMedia'
+  ejectvm:
+    method: 'POST'
+    url: 'redfish/v1/Managers/1/VirtualMedia/CD/Actions/VirtualMedia.EjectMedia'
+  resetbmc:
+    method: 'POST'
+    url: 'redfish/v1/Managers/1/Actions/Manager.Reset'
+  resetkvm:
+    method: 'POST'
+    url: 'redfish/v1/Managers/1/KvmService/Actions/KvmService.Reset'
+  restorefactorydefaults:
+    method: 'POST'
+    url: 'redfish/v1/Managers/1/Actions/Oem/Public/Manager.RestoreFactory'
+  getsmtp:
+    method: 'GET'
+    url: 'redfish/v1/Managers/1/SmtpService'
+  setsmtp:
+    method:
+      - [ ]
+      - 'PATCH'
+    url:
+      - [ ]
+      - 'redfish/v1/Managers/1/SnmpService'
+  getldapservice:
+    method: 'GET'
+    url: 'redfish/v1/AccountService/LdapService'
+  getldapcontrollers:
+    method: 'GET'
+    url: 'redfish/v1/AccountService/LdapService/LdapControllers/1'
+  setldapservice:
+    method: 'PATCH'
+    url: 'redfish/v1/AccountService/LdapService'
+  setldapcontrollers:
+    method: 'PATCH'
+    url: 'redfish/v1/AccountService/LdapService/LdapControllers/1'
+  setldap:
+    method:
+      - 'GET'
+      - 'GET'
+    url:
+      - 'redfish/v1/AccountService/LdapService'
+      - 'redfish/v1/AccountService/LdapService/LdapControllers/1'
+  getldapgroup:
+    method: 'GET'
+    url: 'redfish/v1/AccountService/LdapService/RoleGroups'
+  setldapgroup:
+    method: 'PATCH'
+    url: 'redfish/v1/AccountService/LdapService/RoleGroups/'
+  delldapgroup:
+    method: 'DELETE'
+    url: 'redfish/v1/AccountService/LdapService/RoleGroups/'
+  setsmtpcom:
+    method: 'PATCH'
+    url: 'redfish/v1/Managers/1/SmtpService'
+  exportbiosoption:
+    method: 'POST'
+    url: 'redfish/v1/Systems/1/Actions/BIOS.ExportConfiguration'
+  importbiosoption:
+    method: 'POST'
+    url: 'redfish/v1/Systems/1/Actions/BIOS.ImportConfiguration'
+  getsystemeventlog:
+    method: 'GET'
+    url: 'redfish/v1/Managers/1/LogServices/SEL/Entries'
+  cleareventlog:
+    method: 'POST'
+    url: 'redfish/v1/Managers/1/LogServices/SEL/Actions/LogService.ClearLog'
+  getauditlog:
+    method: 'GET'
+    url: 'redfish/v1/Managers/1/LogServices/AuditLog/Entries'
+  getidllog:
+    method: 'GET'
+    url: 'redfish/v1/Managers/1/LogServices/IDL/Entries'
+  clearidllog:
+    method: 'POST'
+    url: 'redfish/v1/Managers/1/LogServices/IDL/Actions/LogService.ClearLog'
+  getbios:
+    method: 'GET'
+    url: 'redfish/v1/Systems/1/Bios'
+  setbios:
+    method: 'PATCH'
+    url: 'redfish/v1/Systems/1/Bios/Settings'
+  restorebios:
+    method: 'POST'
+    url: 'redfish/v1/Systems/1/Bios/Actions/Bios.ResetBios'
+  get_update_service:
+    method: 'GET'
+    url: 'redfish/v1/UpdateService'
+  upload_update_file:
+    method: 'POST'
+    url: 'redfish/v1/UpdateService/FirmwareInventory'
+  execute_update:
+    method: 'POST'
+    url: 'redfish/v1/UpdateService/Actions/UpdateService.SimpleUpdate'
+  trigger_update:
+    method: 'PATCH'
+    url: 'redfish/v1/UpdateService'
+  get_update_process:
+    method: 'GET'
+    url: 'redfish/v1/TaskService/Tasks/'
+  get_bios_version:
+    method: 'GET'
+    url: 'redfish/v1/UpdateService/FirmwareInventory/Bios'
+  get_active_bmc_version:
+    method: 'GET'
+    url: 'redfish/v1/UpdateService/FirmwareInventory/ActiveBMC'
+  get_sessions:
+    method: 'GET'
+    url: 'redfish/v1/SessionService/Sessions'
+  getstorages:
+    method: 'GET'
+    url: 'redfish/v1/Systems/1/Storage'
+  setstorages_pmc:
+    method: 'POST'
+    url: 'redfish/v1/Systems/1/Storage/{cid}'
+  setstorages:
+    method: 'POST'
+    url: 'redfish/v1/Systems/1/Storage/{cid}/SetCtrlProperty'
+  ipfirewallrules:
+    method: 'GET'
+    url: 'redfish/v1/Managers/1/FirewallRules/IPRules'
+  portfirewallrules:
+    method: 'GET'
+    url: 'redfish/v1/Managers/1/FirewallRules/PortRules'
+  macfirewallrules:
+    method: 'GET'
+    url: 'redfish/v1/Managers/1/FirewallRules/MacRules'
+  bmcbackup:
+    method: 'POST'
+    url: 'redfish/v1/Managers/1/Actions/Oem/Public/ExportConfFile'
+  bmcrestore:
+    method: 'POST'
+    url: 'redfish/v1/Managers/1/Actions/Oem/Public/ImportConfFile'
+  erasephysicadrive:
+    method: 'POST'
+    url: 'redfish/v1/Systems/1/Storage/{cid}/Drives/{pid}/Actions/Oem/Public/Drive.Erase'
+  locatephysicadrive:
+    method: 'POST'
+    url: 'redfish/v1/Systems/1/Storage/{cid}/Drives/{pid}/Actions/Oem/Public/Drive.Locate'
+  hotsparephysicadrive:
+    method: 'POST'
+    url: 'redfish/v1/Systems/1/Storage/{cid}/Drives/{pid}/Actions/Oem/Public/Drive.HotSpare'
+  locatelogicaldrive:
+    method: 'POST'
+    url: 'redfish/v1/Systems/1/Storage/{cid}/Volumes/{vid}/Actions/Oem/Public/Volume.Locate'
+  initlogicaldrive:
+    method: 'POST'
+    url: 'redfish/v1/Systems/1/Storage/{cid}/Volumes/{vid}/Actions/Oem/Public/Volume.Initialize'
+  getnetworkbond:
+    method: 'GET'
+    url: 'redfish/v1/Managers/1/EthernetInterfaces/Oem/Public/BondConfigure'
+  setnetworkbond:
+    method: 'PATCH'
+    url: 'redfish/v1/Managers/1/EthernetInterfaces/Oem/Public/BondConfigure'
+  getsystemlockdownmode:
+    method: 'GET'
+    url: 'redfish/v1/Managers/1/Oem/BmcConfigLock'
+  setsystemlockdownmode:
+    method: 'PATCH'
+    url: 'redfish/v1/Managers/1/Oem/BmcConfigLock'
+  getsessions:
+    method: 'GET'
+    url: 'redfish/v1/SessionService/Sessions'
+  delsession:
+    method: 'DELETE'
+    url: 'redfish/v1/SessionService/Sessions/'
+  getusergroup:
+    method: 'GET'
+    url: 'redfish/v1/AccountService/Roles'
+  setusergroup:
+    method: 'PATCH'
+    url: 'redfish/v1/AccountService/Roles'
+  downloadautocapture:
+    method: 'GET'
+    url: 'redfish/v1/Systems/1/Oem/Public/KVM/ScreenShot/AutoCapture'

@@ -11624,6 +11624,71 @@ class CommonM6(Base):
             res.Message([str(e)])
         return res
 
+    def getnetworkbond(self, client, args):
+        result = ResultBean()
+        # login
+        headers = RestFunc.login_M6(client)
+        if headers == {}:
+            login_res = ResultBean()
+            login_res.State("Failure")
+            login_res.Message(["login error, please check username/password/host/port"])
+            return login_res
+        client.setHearder(headers)
+        url = "api/settings/network-bond"
+        res = RestFunc.restful_get(client, url)
+
+        if res.get('code') == 0:
+            result.State("Success")
+            result.Message([res.get('data')])
+        else:
+            result.State("Failure")
+            result.Message(["get network bond info error, " + res.get('data')])
+
+        RestFunc.logout(client)
+        return result
+
+    def setnetworkbond(self, client, args):
+        result = ResultBean()
+        # login
+        headers = RestFunc.login_M6(client)
+        if headers == {}:
+            login_res = ResultBean()
+            login_res.State("Failure")
+            login_res.Message(["login error, please check username/password/host/port"])
+            return login_res
+        client.setHearder(headers)
+
+        url = "api/settings/network-bond"
+
+        res = RestFunc.restful_get(client, url)
+        if res.get("code") == 0:
+            bonddata = res.get("data")
+        else:
+            result.State("Failure")
+            result.Message(["get network bond info error, " + res.get('data')])
+            return result
+
+
+
+        bondifc = {"dedicated": "eth0", "shared": "eth1"}
+        if args.interface:
+            bonddata["bond_ifc"] = bondifc.get(args.interface, args.interface)
+        if args.bond:
+            bonddata["bond_enable"] = args.bond
+
+        #{"id": 1, "bond_enable": "disable", "bond_mode": "active-backup", "bond_ifc": "eth0"}
+        res = RestFunc.restful_put(client, url, bonddata)
+
+        if res.get('code') == 0:
+            result.State("Success")
+            result.Message(["Set network Bond successfully. It will take few seconds to bring up the interface again."])
+        else:
+            result.State("Failure")
+            result.Message(["set network bond info error, " + res.get('data')])
+
+        RestFunc.logout(client)
+        return result
+
     def getbootimage(self, client, args):
         result = ResultBean()
         result.State("Not Support")
@@ -11733,18 +11798,6 @@ class CommonM6(Base):
         return result
 
     def clearsystemlog(self, client, args):
-        result = ResultBean()
-        result.State("Not Support")
-        result.Message(['The M6 model does not support this feature.'])
-        return result
-
-    def setnetworkbond(self, client, args):
-        result = ResultBean()
-        result.State("Not Support")
-        result.Message(['The M6 model does not support this feature.'])
-        return result
-
-    def getnetworkbond(self, client, args):
         result = ResultBean()
         result.State("Not Support")
         result.Message(['The M6 model does not support this feature.'])

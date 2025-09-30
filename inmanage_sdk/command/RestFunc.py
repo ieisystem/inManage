@@ -8112,6 +8112,50 @@ class NF5280M5_SensorDesc():
         # print(desc)
         return desc
 
+def restful_get(client, url):
+    response = client.request("GET", url, client.getHearder(), None, None, None, None)
+    JSON = {}
+    if response.status_code in range(200, 300):
+        JSON['code'] = 0
+        result = response.json()
+        JSON['data'] = result
+    else:
+        JSON['code'] = 1
+        JSON['data'] = formatError(url, response)
+    return JSON
+
+
+def restful_put(client, url, data):
+    response = client.request("PUT", url, client.getHearder(), json=data)
+    JSON = {}
+    if response.status_code in range(200, 300):
+        JSON['code'] = 0
+        try:
+            result = response.json()
+        except:
+            result = response.content
+        JSON['data'] = result
+    else:
+        JSON['code'] = 1
+        JSON['data'] = formatError(url, response)
+    return JSON
+
+
+def restful_patch(client, url, data):
+    response = client.request("PATCH", url, client.getHearder(), json=data)
+    JSON = {}
+    if response.status_code in range(200, 300):
+        JSON['code'] = 0
+        try:
+            result = response.json()
+        except:
+            result = response.content
+        JSON['data'] = result
+    else:
+        JSON['code'] = 1
+        JSON['data'] = formatError(url, response)
+    return JSON
+
 
 sensortype_strings = {}
 sensortype_strings[0] = "All Sensors"
