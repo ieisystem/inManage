@@ -234,6 +234,7 @@ setbmclogcfg = {
     'host_tag': 'hosttag',
     'protocol_type': 'protocolType',
     'server_id': 'serverId',
+    'server_status': 'serverStatus',
     'server_addr': 'serverAddr',
     'server_port': 'serverPort',
     'log_type': 'logType',

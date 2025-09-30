@@ -30,7 +30,7 @@ class configUtil():
                 cls._instance = super().__new__(cls, *args, **kwargs)
         return cls._instance
 
-    def getRouteOption(self, productName, bmcVersion=None):
+    def getRouteOption(self, productName, bmcVersion=None, ipmi_mode=None):
         # if True:
         try:
             with open(modelRoute, "r") as file:
@@ -45,8 +45,12 @@ class configUtil():
 
             if content.get(productName.upper(), None):
                 model_info = content.get(productName.upper())
-                platform = model_info["platform"]
                 model_keysV = copy.deepcopy(list(model_info.keys()))
+                if model_info.get("platform") == "M7":
+                    if ipmi_mode == "M7_redfish":
+                        model_info = interfacedict.get("OpenbmcM7")
+                        model_keysV = copy.deepcopy(list(model_info.keys()))
+                platform = model_info["platform"]
                 model_keysV.remove("platform")
                 model_keysV.remove('common')
                 model_keys = []
@@ -71,12 +75,31 @@ class configUtil():
         except Exception as e:
             return "Error: " + str(e), None
 
+    def get_platform(self, pn):
+        hosttype = ""
+        with open(modelRoute, "r") as file:
+            modeldict = yaml.safe_load(file)
+
+        with open(interfaceRoute, "r") as file:
+            interfacedict = yaml.safe_load(file)
+
+        for key, value in modeldict.items():
+            if pn in value:
+                return interfacedict.get(key).get("platform")
+        return hosttype
+
     def getModelSupport(self):
         # try:
         yaml1 = open(modelRoute)
         content = yaml.load(yaml1, Loader=yaml.BaseLoader)
         yaml1.close()
-        return list(content.keys())
+        ks_list = []
+        for key in content.keys():
+            values = content.get(key)
+            for value in values:
+                if "KR" in value:
+                    ks_list.append(value)
+        return list(ks_list)
 
     # xmlfilepath 文件路径
     def getSetOption(self, xmlfilepath):

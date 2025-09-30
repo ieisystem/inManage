@@ -144,6 +144,58 @@ class Base(IBase):
             res.Message('Can not get Fru information')
         return res
 
+    def setfru(self, client, args):
+        result = ResultBean()
+        Alist = [
+            'CP',
+            'CS',
+            'PM',
+            'PPN',
+            'PS',
+            'PN',
+            'PV',
+            'PAT',
+            'BM',
+            'BPN',
+            'BS',
+            'BP']
+        if args.attribute is not None and args.value is not None:
+            if self.judgeAttInList(args.attribute, Alist):
+                value = args.value
+                if str(value).strip() == '':
+                    result.State('Failure')
+                    result.Message(['-V  Not Empty.'])
+                    return result
+                client.lantype = "lanplus"
+                section, index = Fru_Attr.get(args.attribute)
+                re = IpmiFunc.editFruByIpmi(
+                    client, 0, section, index, args.value)
+                state = re.get('code', -1)
+                if state == 0:
+                    result.State('Success')
+                    result.Message(
+                        ['set ' + Fru_Attrs[args.attribute] + ' finished'])
+                else:
+                    result.State('Failure')
+                    result.Message(
+                        ['set ' + Fru_Attrs[args.attribute] + ' failure'])
+            else:
+                result.State('Failure')
+                result.Message([args.attribute + "  is not in set option"])
+        else:
+            result.State('Failure')
+            result.Message(["-A or -V  Not Empty"])
+        return result
+
+    # 判断-A的值是否在选项中
+    def judgeAttInList(self, attr, descriptionList):
+        flag = False
+        for desc in descriptionList:
+            if desc == attr:
+                flag = True
+                break
+        return flag
+
     def getProdcut(self, client, args):
         """
         :return:
@@ -1484,3 +1536,33 @@ def hexReverse(data):
     seq = time_hex.split(' ')[::-1]
     data = '0x' + ' 0x'.join(seq)
     return data
+
+Fru_Attr = {
+    'CP': ('c', 0),
+    'CS': ('c', 1),
+    'PM': ('p', 0),
+    'PPN': ('p', 2),
+    'PS': ('p', 4),
+    'PN': ('p', 1),
+    'PV': ('p', 3),
+    'PAT': ('p', 5),
+    'BM': ('b', 0),
+    'BP': ('b', 3),
+    'BS': ('b', 2),
+    'BPN': ('b', 1)
+}
+
+Fru_Attrs = {
+    'CP': 'chassis part number',
+    'CS': 'chassis serial',
+    'PM': 'product manufacturer',
+    'PPN': 'product part number',
+    'PS': 'product serial',
+    'PN': 'product name',
+    'PV': 'product version',
+    'PAT': 'product asset tag',
+    'BM': 'board manufacturer',
+    'BPN': 'board product name',
+    'BS': 'board serial number',
+    'BP': 'board part number'
+}

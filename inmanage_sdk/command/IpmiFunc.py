@@ -1237,15 +1237,17 @@ def getMcInfoByIpmi(client):
 
 
 def getFirmwareVersoinByMcinfo(client):
+    bmcVersion = None
     result = getMcInfoByIpmi(client)
     if result['code'] != 0:
-        return ''
+        return bmcVersion
     data = result['data']
-    bmcVersion_0 = data['firmware_revision']
-    bmcVersion_1 = data['aux_firmware_rev_info'].split(";")[0]
-    bmcVersion_00 = int(bmcVersion_0.split(".")[0], 16)
-    bmcVersion_01 = int(bmcVersion_0.split(".")[1], 16)
-    bmcVersion = str(bmcVersion_00) + "." + str(bmcVersion_01).zfill(3) + str(bmcVersion_1).zfill(3)
+    if len(data) > 0:
+        bmcVersion_0 = data['firmware_revision']
+        bmcVersion_1 = data['aux_firmware_rev_info'].split(";")[0]
+        bmcVersion_00 = int(bmcVersion_0.split(".")[0], 16)
+        bmcVersion_01 = int(bmcVersion_0.split(".")[1], 16)
+        bmcVersion = str(bmcVersion_00) + "." + str(bmcVersion_01).zfill(3) + str(bmcVersion_1).zfill(3)
     return bmcVersion
 
 
@@ -1352,6 +1354,17 @@ def getBoardInfo(client):
     cmd_get = "raw 0x3c 0x0a 0x00"
     return getLineRawByIpmi(client, cmd_get)
 
+def ACCycleG7(client):
+    cmd1 = '0x3c 0x28 0xff 0xfc'
+    cmd2 = '0x3c 0x28 0xff 0xfd'
+    res = sendRawByIpmi(client, cmd1)
+    if res.get("code") == 0:
+        import time
+        time.sleep(10)
+        res2 = sendRawByIpmi(client, cmd2)
+        return res2
+    else:
+        return res
 
 def getStatus(client, ctrlindex):
     for num in range(0, 600):
@@ -1379,6 +1392,20 @@ def getStatus(client, ctrlindex):
             time.sleep(5)
     else:
         return 6
+
+def checkPlatform(client):
+    cmd_h = "0x3c 0x42 0x01"
+    res = __getCmd_type(client, cmd_h, 'readline')
+    if res.get('code') == 0:
+        flg = res.get('data').replace("\n", "").replace(" ", "")[0:2]
+        ptdict = {}
+        data = str(res.get('data')).replace("\n", "").split(" ")
+        ptdict["cpu"] = data[1]
+        ptdict["soc"] = data[2]
+        ptdict["bmc"] = data[3]
+        # if data[3] == "01":
+        #     return True
+    return ptdict
 
 # ip地址转换十六进制
 def __ip2hex(ip):

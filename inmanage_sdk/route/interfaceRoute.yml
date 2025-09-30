@@ -30,4 +30,7 @@ CommonA7:
 I24M6:
   platform: M6
   common: I24M6
+CommonM8:
+  platform: M8
+  common: CommonM8
 

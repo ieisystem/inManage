@@ -11,10 +11,12 @@ include inmanage_sdk/command/bios/SA5112M5.xml
 include inmanage_sdk/command/bios/SA5212M5.xml
 include inmanage_sdk/command/bios/A7.xml
 include inmanage_sdk/command/bios/M7.xml
+include inmanage_sdk/command/bios/M8.xml
 include inmanage_sdk/command/bios/M6-N.xml
 include inmanage_sdk/command/bios/M7_5.10.00.xml
 include inmanage_sdk/route/interfaceRoute.yml
 include inmanage_sdk/route/modelRoute.yml
+include inmanage_sdk/command/RedfishUrl.yml
 include __init__.py
 include inmanage.py
 include README.md
