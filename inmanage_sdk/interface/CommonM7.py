@@ -6,8 +6,7 @@ import time
 import os
 import re
 import collections
-
-from inmanage_sdk.util import RegularCheckUtil, RequestClient, fileUtil, configUtil
+from inmanage_sdk.util import RegularCheckUtil, RequestClient, fileUtil, configUtil, RedfishTemplate
 from inmanage_sdk.command import RestFunc, IpmiFunc, RedfishFunc
 from inmanage_sdk.interface.CommonM6 import CommonM6, addPMCLogicalDisk, addMVLogicalDisk
 from inmanage_sdk.interface.ResEntity import (
@@ -5552,6 +5551,41 @@ class CommonM7(CommonM6):
         except Exception as e:
             res.State("Failure")
             res.Message([str(e)])
+        return res
+
+    def uploadssl(self, client, args):
+        res = ResultBean()
+        if args.certificate is None or args.private is None:
+            res.State("Failure")
+            res.Message(["All the parameters must not be left blank."])
+            return res
+        headers = RestFunc.login_M6(client)
+        if headers == {}:
+            login_res = ResultBean()
+            login_res.State("Failure")
+            login_res.Message(
+                ["login error, please check username/password/host/port"])
+            return login_res
+        postBody = {}
+        postBody['data'] = {}
+        postBody['file'] = [('new_certificate', open(args.certificate, 'rb')),
+                            ('new_private_key', open(args.private, 'rb')),
+                            ('trusted_ca_support', 0),
+                            ('trusted_ca_certificates', 'undefined')]
+        postBody['url'] = 'api/settings/ssl/certificate'
+        result = RedfishTemplate.post_for_object(client, postBody)
+        if result.State:
+            msg = result.Message.content.decode()
+            if '"cc": 0' in msg:
+                res.State("Success")
+                res.Message('')
+            else:
+                res.State("Failure")
+                res.Message([msg])
+        else:
+            res.State("Failure")
+            res.Message(result.Message)
+        RestFunc.logout(client)
         return res
 
 

@@ -29,9 +29,8 @@ from inmanage_sdk.interface.ResEntity import (
     vlanBean
 )
 from inmanage_sdk.interface.Base import (Base, ascii2hex, hexReverse)
-from inmanage_sdk.util import RedfishTemplate
+from inmanage_sdk.util import RedfishTemplate, RegularCheckUtil
 from inmanage_sdk.command import RestFunc, IpmiFunc
-from inmanage_sdk.util import RegularCheckUtil
 
 
 class CommonM8(Base):
@@ -7281,7 +7280,7 @@ class CommonM8(Base):
             return res
 
         url_result = self.get_url_info(sys._getframe().f_code.co_name)
-        result = RedfishTemplate.get_for_object_single(client, url_result.get("url") + '/' +args.name)
+        result = RedfishTemplate.get_for_object_single(client, url_result.get("url") + '/' + args.name)
         if result.State:
             info = result.Message
             group = list(info['AssignedPrivileges'])
@@ -7353,8 +7352,138 @@ class CommonM8(Base):
                 result = self.addusergroup(client, args)
         return result
 
-    #update
+    def getssl(self, client, args):
+        url_result = self.get_url_info(sys._getframe().f_code.co_name)
+        result = RedfishTemplate.get_for_object_single(client, url_result.get('url'))
+        res = ResultBean()
+        if result.State:
+            info = result.Message
+            pub= info.get('Oem', {}).get('Public', {})
+            sslInfo = collections.OrderedDict()
+            sslInfo["Certificate Version"] = pub.get('CertificateVersion', 'N/A')
+            sslInfo["SerialNumber"] = pub.get('SerialNumber', 'N/A')
+            sslInfo["Signature Algorithms"] = pub.get('SignatureAlgorithm', 'N/A')
+            sslInfo["Valid Not After"] = info.get('ValidNotAfter', 'N/A')
+            sslInfo["Valid Not Before"] = info.get('ValidNotBefore', 'N/A')
+            issuer = info.get('Issuer', {})
+            sslInfo["Issuer Common Name"] = issuer.get('CommonName', 'N/A')
+            sslInfo["Issuer Country"] = issuer.get('Country', 'N/A')
+            sslInfo["Issuer Organization Unit"] = 'N/A'
+            sslInfo["Issuer Organization"] = issuer.get('Organization', 'N/A')
+            sslInfo["Issuer State"] = 'N/A'
+            sslInfo["Issuer City"] = 'N/A'
+            sslInfo["Issuer Email"] = 'N/A'
+            subject = info.get('Subject', {})
+            sslInfo["Subject Common Name"] = subject.get('CommonName', 'N/A')
+            sslInfo["Subject Country"] = subject.get('Country', 'N/A')
+            sslInfo["Subject Organization Unit"] = 'N/A'
+            sslInfo["Subject Organization"] = subject.get('Organization', 'N/A')
+            sslInfo["Subject State"] = 'N/A'
+            sslInfo["Subject City"] = 'N/A'
+            sslInfo["Subject Email"] = 'N/A'
+            res.State("Success")
+            res.Message([sslInfo])
+        else:
+            res.State("Failure")
+            res.Message(result.Message)
+        return res
 
+    def setssl(self, client, args):
+        res = ResultBean()
+        if args.commonname is None or args.organization is None or args.organizationunit is None or \
+                args.citylocality is None or args.stateprovince is None or args.country is None or \
+                args.email is None or args.validtime is None:
+            res.State("Failure")
+            res.Message(["All the parameters must not be left blank."])
+            return res
+        if not self._validate_64_str(args.commonname):
+            res.State("Failure")
+            res.Message(["CommonName should be a string with a maximum length of 64 characters which allow letters, numbers, hyphens (-), underscores (_), dots (.), and spaces."])
+            return res
+        if not self._validate_64_str(args.organization):
+            res.State("Failure")
+            res.Message(["Organization should be a string with a maximum length of 64 characters which allow letters, numbers, hyphens (-), underscores (_), dots (.), and spaces."])
+            return res
+        if not self._validate_64_str(args.organizationunit):
+            res.State("Failure")
+            res.Message(["OrganizationUnit should be a string with a maximum length of 64 characters which allow letters, numbers, hyphens (-), underscores (_), dots (.), and spaces."])
+            return res
+        if not self._validate_128_str(args.citylocality):
+            res.State("Failure")
+            res.Message(["Citylocality should be a string with a maximum length of 128 characters which allow letters, numbers, hyphens (-), underscores (_), dots (.), and spaces"])
+            return res
+        if not self._validate_128_str(args.stateprovince):
+            res.State("Failure")
+            res.Message(["StateProvince should be a string with a maximum length of 128 characters which allow letters, numbers, hyphens (-), underscores (_), dots (.), and spaces"])
+            return res
+        if not self._validate_2_str(args.country):
+            res.State("Failure")
+            res.Message(["Country should be two characters and not allow special characters"])
+            return res
+        if args.validtime < 1 or args.validtime > 3650:
+            res.State("Failure")
+            res.Message(["ValidTime should be within the range of 1 to 3650 days"])
+            return res
+        url_result = self.get_url_info(sys._getframe().f_code.co_name)
+        data = {
+            "Country":args.country,
+            "CommonName":args.commonname,
+            "City":args.citylocality,
+            "State":args.stateprovince,
+            "OrgName":args.organization,
+            "OrgUnit":args.organizationunit,
+            "EmailID":args.email,
+            "ValidDays":args.validtime,
+            "KeyLength":2048
+        }
+        patchBody = {}
+        patchBody['url'] = url_result.get('url') + + args.name
+        patchBody['json'] = data
+        result = RedfishTemplate.post_for_object(client, patchBody)
+        if result.State:
+            res.State("Success")
+            res.Message('')
+        else:
+            res.State("Failure")
+            res.Message(result.Message)
+        return res
+
+    def _validate_64_str(self, input_str):
+        pattern = '^[a-zA-Z0-9\-\_\. ]{1,64}$'
+        return bool(re.search(pattern, input_str, re.I))
+
+    def _validate_128_str(self, input_str):
+        pattern = '^[a-zA-Z0-9\-\_\. ]{1,128}$'
+        return bool(re.search(pattern, input_str, re.I))
+
+    def _validate_2_str(self, input_str):
+        pattern = '^[A-Z]{2}$'
+        return bool(re.search(pattern, input_str, re.I))
+
+    def uploadssl(self, client, args):
+        res = ResultBean()
+        if args.certificate is None or args.private is None:
+            res.State("Failure")
+            res.Message(["All the parameters must not be left blank."])
+            return res
+        url_result = self.get_url_info("uploadssl")
+        postBody = {}
+        postBody['data'] = {}
+        postBody['file'] = [('new_certificate', open(args.certificate, 'rb')),
+                            ('new_private_key', open(args.private, 'rb')),
+                            ('current_password', args.passcode),
+                            ('encrypt_flag', False)]
+        postBody['url'] = url_result.get('url')
+        result = RedfishTemplate.post_for_object(client, postBody)
+        if result.State:
+            res.State("Success")
+            res.Message('')
+        else:
+            res.State("Failure")
+            res.Message(result.Message)
+        return res
+
+    #update
     def fwupdate(self, client, args):
         if args.type == "BMC":
             return self.updatebmc(client, args)
@@ -7411,13 +7540,13 @@ class CommonM8(Base):
             return result
 
         #校验
-        if hpminfo.get("des").upper() == "BIOS_PFR":
+        if hpminfo.get("des") == "BIOS_PFR":
             args.type = "BIOS_PFR"
             return self.updatebiosPFR(client, args)
 
-        if hpminfo.get("des").upper() != "BIOS":
+        if hpminfo.get("des") != "BIOS":
             result.State("Failure")
-            result.Message("not valid BIOS update file" + str(hpminfo))
+            result.Message("not valid BIOS update file")
             return result
 
         log_path = self._get_update_log_path(client, args)
@@ -7725,10 +7854,10 @@ class CommonM8(Base):
             result.State("Failure")
             result.Message([hpminfo])
             return result
-        if hpminfo.get("des").upper() == "BMC_PFR":
+        if hpminfo.get("des") == "BMC_PFR":
             args.type = "BMC_PFR"
             return self.updatebmcPFR(client, args)
-        if hpminfo.get("des").upper() != "APP" and hpminfo.get("des").upper() != "OPENBMC":
+        if hpminfo.get("des") != "APP" and hpminfo.get("des") != "OPENBMC":
             result.State("Failure")
             result.Message("not valid bmc update file")
             return result
@@ -7913,9 +8042,9 @@ class CommonM8(Base):
             result.Message([hpminfo])
             return result
 
-        if hpminfo.get("des").upper() != "BMC_PFR":
+        if hpminfo.get("des") != "BMC_PFR":
             result.State("Failure")
-            result.Message("not valid bmc PFR update file" )
+            result.Message("not valid bmc PFR update file")
             return result
 
         wirte_log(log_path, "Upload File", "Network Ping OK", "")
