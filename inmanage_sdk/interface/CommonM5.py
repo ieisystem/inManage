@@ -5,7 +5,7 @@ from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
 import threading
-from inmanage_sdk.util import configUtil, RegularCheckUtil
+from inmanage_sdk.util import configUtil, RegularCheckUtil, RedfishTemplate
 from inmanage_sdk.command import backup, restore, RestFunc, IpmiFunc
 import sys
 import os
@@ -8964,6 +8964,161 @@ class CommonM5(Base):
         result.Message(['The M5 model does not support this feature.'])
         return result
 
+    def getssl(self, client, args):
+        headers = RestFunc.login(client)
+        if headers == {}:
+            login_res = ResultBean()
+            login_res.State("Failure")
+            login_res.Message(
+                ["login error, please check username/password/host/port"])
+            return login_res
+        client.setHearder(headers)
+        result = RedfishTemplate.get_for_object_single(client, "api/settings/ssl/certificate")
+        res = ResultBean()
+        if result.State:
+            info = result.Message
+            sslInfo = collections.OrderedDict()
+            sslInfo["Certificate Version"] = info.get('certificate_version', 'N/A')
+            sslInfo["SerialNumber"] = info.get('serial_number', 'N/A')
+            sslInfo["Signature Algorithms"] = info.get('sha256WithRSAEncryption', 'N/A')
+            sslInfo["Valid Not After"] = info.get('valid_from', 'N/A')
+            sslInfo["Valid Not Before"] = info.get('valid_till', 'N/A')
+            sslInfo["Issuer Common Name"] = info.get('from_common_name', 'N/A')
+            sslInfo["Issuer Country"] = info.get('from_country', 'N/A')
+            sslInfo["Issuer Organization Unit"] = info.get('from_organization_unit', 'N/A')
+            sslInfo["Issuer Organization"] = info.get('from_organization', 'N/A')
+            sslInfo["Issuer State"] = info.get('from_state', 'N/A')
+            sslInfo["Issuer City"] = info.get('from_city', 'N/A')
+            sslInfo["Issuer Email"] = info.get('from_email_id', 'N/A')
+            sslInfo["Subject Common Name"] = info.get('to_common_name', 'N/A')
+            sslInfo["Subject Country"] = info.get('to_country', 'N/A')
+            sslInfo["Subject Organization Unit"] = info.get('to_organization_unit', 'N/A')
+            sslInfo["Subject Organization"] = info.get('to_organization', 'N/A')
+            sslInfo["Subject State"] = info.get('to_state', 'N/A')
+            sslInfo["Subject City"] = info.get('to_city', 'N/A')
+            sslInfo["Subject Email"] = info.get('to_email_id', 'N/A')
+            sslInfo["Public Key"] = info.get('public_key', 'N/A')
+            res.State("Success")
+            res.Message([sslInfo])
+        else:
+            res.State("Failure")
+            res.Message(result.Message)
+        RestFunc.logout(client)
+        return res
+
+    def setssl(self, client, args):
+        res = ResultBean()
+        if args.commonname is None or args.organization is None or args.organizationunit is None or \
+                args.citylocality is None or args.stateprovince is None or args.country is None or \
+                args.email is None or args.validtime is None:
+            res.State("Failure")
+            res.Message(["All the parameters must not be left blank."])
+            return res
+        if not self._validate_64_str(args.commonname):
+            res.State("Failure")
+            res.Message(["CommonName should be a string with a maximum length of 64 characters which allow letters, numbers, hyphens (-), underscores (_), dots (.), and spaces."])
+            return res
+        if not self._validate_64_str(args.organization):
+            res.State("Failure")
+            res.Message(["Organization should be a string with a maximum length of 64 characters which allow letters, numbers, hyphens (-), underscores (_), dots (.), and spaces."])
+            return res
+        if not self._validate_64_str(args.organizationunit):
+            res.State("Failure")
+            res.Message(["OrganizationUnit should be a string with a maximum length of 64 characters which allow letters, numbers, hyphens (-), underscores (_), dots (.), and spaces."])
+            return res
+        if not self._validate_128_str(args.citylocality):
+            res.State("Failure")
+            res.Message(["Citylocality should be a string with a maximum length of 128 characters which allow letters, numbers, hyphens (-), underscores (_), dots (.), and spaces"])
+            return res
+        if not self._validate_128_str(args.stateprovince):
+            res.State("Failure")
+            res.Message(["StateProvince should be a string with a maximum length of 128 characters which allow letters, numbers, hyphens (-), underscores (_), dots (.), and spaces"])
+            return res
+        if not self._validate_2_str(args.country):
+            res.State("Failure")
+            res.Message(["Country should be two characters and not allow special characters"])
+            return res
+        if args.validtime < 1 or args.validtime > 3650:
+            res.State("Failure")
+            res.Message(["ValidTime should be within the range of 1 to 3650 days"])
+            return res
+        headers = RestFunc.login(client)
+        if headers == {}:
+            login_res = ResultBean()
+            login_res.State("Failure")
+            login_res.Message(
+                ["login error, please check username/password/host/port"])
+            return login_res
+        client.setHearder(headers)
+        data = {
+            "country":args.country,
+            "common_name":args.commonname,
+            "city":args.citylocality,
+            "state":args.stateprovince,
+            "organization":args.organization,
+            "organization_unit":args.organizationunit,
+            "email_id":args.email,
+            "valid_days":args.validtime,
+            "key_length":2048
+        }
+        patchBody = {}
+        patchBody['url'] = 'api/operations/ssl/certificate/generate'
+        patchBody['json'] = data
+        result = RedfishTemplate.post_for_object(client, patchBody)
+        if result.State:
+            res.State("Success")
+            res.Message()
+        else:
+            res.State("Failure")
+            res.Message(result.Message)
+        RestFunc.logout(client)
+        return res
+
+    def _validate_64_str(self, input_str):
+        pattern = '^[a-zA-Z0-9\-\_\. ]{1,64}$'
+        return bool(re.search(pattern, input_str, re.I))
+
+    def _validate_128_str(self, input_str):
+        pattern = '^[a-zA-Z0-9\-\_\. ]{1,128}$'
+        return bool(re.search(pattern, input_str, re.I))
+
+    def _validate_2_str(self, input_str):
+        pattern = '^[A-Z]{2}$'
+        return bool(re.search(pattern, input_str, re.I))
+
+    def uploadssl(self, client, args):
+        res = ResultBean()
+        if args.certificate is None or args.private is None:
+            res.State("Failure")
+            res.Message(["All the parameters must not be left blank."])
+            return res
+        headers = RestFunc.login(client)
+        if headers == {}:
+            login_res = ResultBean()
+            login_res.State("Failure")
+            login_res.Message(
+                ["login error, please check username/password/host/port"])
+            return login_res
+        client.setHearder(headers)
+        postBody = {}
+        postBody['data'] = {}
+        postBody['file'] = [('new_certificate', open(args.certificate, 'rb')),
+                            ('new_private_key', open(args.private, 'rb'))]
+        postBody['url'] = 'api/settings/ssl/certificate'
+        result = RedfishTemplate.post_for_object(client, postBody)
+        if result.State:
+            msg = result.Message.content.decode()
+            if '"cc": 0' in msg:
+                res.State("Success")
+                res.Message('')
+            else:
+                res.State("Failure")
+                res.Message([msg])
+        else:
+            res.State("Failure")
+            res.Message(result.Message)
+        RestFunc.logout(client)
+        return res
 
 def getWeek(binr):
     bin_dict = {1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thur', 5: 'Fri', 6: 'Sat', 7: 'Sun'}

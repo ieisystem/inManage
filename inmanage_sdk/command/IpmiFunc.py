@@ -1396,9 +1396,8 @@ def getStatus(client, ctrlindex):
 def checkPlatform(client):
     cmd_h = "0x3c 0x42 0x01"
     res = __getCmd_type(client, cmd_h, 'readline')
-    if res.get('code') == 0:
-        flg = res.get('data').replace("\n", "").replace(" ", "")[0:2]
-        ptdict = {}
+    ptdict = {}
+    if res.get('code') == 0 and res.get('data'):
         data = str(res.get('data')).replace("\n", "").split(" ")
         ptdict["cpu"] = data[1]
         ptdict["soc"] = data[2]

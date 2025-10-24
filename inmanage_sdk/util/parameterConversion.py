@@ -244,6 +244,14 @@ setSystemLockdownMode = {
     'lock_status': 'status',
 }
 
+setssl = {
+    'common_name': 'commonname',
+    'organization_unit': 'organizationunit',
+    'city_locality': 'citylocality',
+    'state_province': 'stateprovince',
+    'valid_time': 'validtime',
+}
+
 def getParam(dictobj):
     param = {
         'setsmtp': setsmtp,
@@ -280,6 +288,7 @@ def getParam(dictobj):
         'setsmtpdest': setsmtpdest,
         'setbmclogcfg': setbmclogcfg,
         'setSystemLockdownMode': setSystemLockdownMode,
+        'setssl': setssl,
     }
     if 'subcommand' in dictobj:
         subcommand = dictobj['subcommand']

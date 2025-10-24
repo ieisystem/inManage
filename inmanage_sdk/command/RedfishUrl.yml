@@ -373,3 +373,12 @@ CommonM8:
   downloadautocapture:
     method: 'GET'
     url: 'redfish/v1/Systems/1/Oem/Public/KVM/ScreenShot/AutoCapture'
+  getssl:
+    method: 'GET'
+    url: 'redfish/v1/Managers/1/NetworkProtocol/HTTPS/Certificates/1'
+  setssl:
+    method: 'POST'
+    url: 'redfish/v1/Managers/1/SecurityService/HttpsCert/Actions/HttpsCert.GenerateCSR'
+  uploadssl:
+    method: 'POST'
+    url: 'redfish/v1/Managers/1/SecurityService/HttpsCert/Actions/HttpsCert.ImportServerCertificate'
