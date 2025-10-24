@@ -61,6 +61,8 @@ class HostTypeClient():
             if hosttpye == "":
                 hosttpye = pn
             if hosttpye == "M7":
+                client = RequestClient.RequestClient()
+                client.setself(host, username, passcode, '', port, "lanplus")
                 if IpmiFunc.checkPlatform(client).get("bmc") == "01":
                     hosttpye = "M7_redfish"
             impl, platform = configutil.getRouteOption(pn, version, hosttpye)
@@ -126,7 +128,7 @@ class HostTypeClient():
         return "M4"
 
     def judge_by_ipmi_api(self, host, username, passcode, port):
-        pn = None
+        productName = None
         try:
             client = RequestClient.RequestClient()
             client.setself(host, username, passcode, '', port, "lanplus")
@@ -143,7 +145,7 @@ class HostTypeClient():
 
         except Exception as e:
             return "", "get FRU info failed, except info: " + str(e)
-        return pn, version
+        return productName, firmwareVersion
 
     def judge_by_redfish_api(self, host, username, passcode, port):
         host_type = None
