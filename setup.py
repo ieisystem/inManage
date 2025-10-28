@@ -23,7 +23,7 @@ def version():
 
 with io.open('README.md') as readme:
     setup(
-        name='inManage',
+        name='inmanage',
         version=version(),
         description='ieisystem server manager api',
         long_description=readme.read(),

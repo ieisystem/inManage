@@ -88,18 +88,25 @@ class configUtil():
                 return interfacedict.get(key).get("platform")
         return hosttype
 
-    def getModelSupport(self):
+    def getModelSupport(self, model="KR"):
         # try:
         yaml1 = open(modelRoute)
         content = yaml.load(yaml1, Loader=yaml.BaseLoader)
         yaml1.close()
         ks_list = []
+        nf_list = []
         for key in content.keys():
             values = content.get(key)
             for value in values:
-                if "KR" in value:
+                if "KR" in value and model=="KR":
                     ks_list.append(value)
-        return list(ks_list)
+                elif "KR" not in value and model=="NF":
+                    nf_list.append(value)
+        if model=="KR":
+            return list(ks_list)
+        else:
+            return list(nf_list)
+        
 
     # xmlfilepath 文件路径
     def getSetOption(self, xmlfilepath):
