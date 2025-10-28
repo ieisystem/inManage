@@ -22,7 +22,7 @@ current_time = time.strftime(
     '%Y-%m-%d   %H:%M:%S',
     time.localtime(
         time.time()))
-__version__ = '1.4.1'
+__version__ = '1.4.2'
 
 
 ERR_dict = {
@@ -59,10 +59,15 @@ def main(params):
     args = dict_to_object(param)
     args.port = None
     configutil = configUtil.configUtil()
-    if args.subcommand is not None and args.subcommand == 'support_model':
-        res['State'] = "Success"
-        res['Message'] = configutil.getModelSupport()
-        return res
+    if args.subcommand is not None:
+        if args.subcommand == 'support_model':
+            res['State'] = "Success"
+            res['Message'] = configutil.getModelSupport("KR")
+            return res
+        elif args.subcommand == 'support_model_nf':
+            res['State'] = "Success"
+            res['Message'] = configutil.getModelSupport("NF")
+            return res
     # 使用fru获取机型信息
     hostTypeClient = HostTypeJudge.HostTypeClient()
     result = hostTypeClient.getProductNameByIPMI(args)
