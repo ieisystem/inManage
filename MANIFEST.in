@@ -14,6 +14,7 @@ include inmanage_sdk/command/bios/M7.xml
 include inmanage_sdk/command/bios/M8.xml
 include inmanage_sdk/command/bios/M6-N.xml
 include inmanage_sdk/command/bios/M7_5.10.00.xml
+include inmanage_sdk/command/bios/NF5468A8.xml
 include inmanage_sdk/route/interfaceRoute.yml
 include inmanage_sdk/route/modelRoute.yml
 include inmanage_sdk/command/RedfishUrl.yml
