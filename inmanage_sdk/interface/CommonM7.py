@@ -5566,6 +5566,7 @@ class CommonM7(CommonM6):
             login_res.Message(
                 ["login error, please check username/password/host/port"])
             return login_res
+        client.setHearder(headers)
         postBody = {}
         postBody['data'] = {}
         postBody['file'] = [('new_certificate', open(args.certificate, 'rb')),
