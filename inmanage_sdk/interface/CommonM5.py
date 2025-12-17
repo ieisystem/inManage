@@ -12,6 +12,10 @@ import os
 import json
 import time
 import re
+import yaml
+from datetime import datetime, timedelta
+import subprocess
+from typing import List, Dict, Set, Optional
 from inmanage_sdk.interface.Base import (Base, ascii2hex, hexReverse)
 import collections
 from inmanage_sdk.interface.ResEntity import (ResultBean, CapabilitiesBean, CPUBean, Cpu, Memory,
@@ -33,6 +37,8 @@ from inmanage_sdk.interface.ResEntity import (ResultBean, CapabilitiesBean, CPUB
 rootpath = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 sys.path.append(os.path.join(rootpath, "command"))
 sys.path.append(os.path.join(rootpath, "util"))
+filter = os.path.join(rootpath, "command", "M5Log", "inspectionFilter.yml")
+
 
 MR_LD_CACHE_WRITE_BACK = 0x01
 MR_LD_CACHE_WRITE_ADAPTIVE = 0x02
@@ -528,6 +534,309 @@ ListRiserModel = {
     2: "X8+X4+X4+X4+X4",
     0xFF: "No Riser"
 }
+
+class HealthNodeDetail:
+    def __init__(self):
+        self.item = ""
+        self.status = ""
+        self.value = ""
+
+class HealthReport:
+    def __init__(self):
+        self.ip = ""
+        self.product_name = ""
+        self.health_status = ""
+        self.code = 0
+        self.exec_time = ""
+        self.chassis_num = ""
+        self.payload_num = ""
+
+class HealthCheckBean:
+    def __init__(self):
+        self.user_name = ""
+        self.password = ""
+        self.lanplus = ""
+        self.id = ""
+        self.result = False
+        self.message = ""
+        self.health_report = HealthReport()
+        self.health_details: List[HealthNodeDetail] = []
+
+class NewHealth:
+    def perform(self, auth_bean) -> HealthCheckBean:
+        ip = auth_bean.host
+        health_check = HealthCheckBean()
+        health_check.user_name = auth_bean.username
+        health_check.password = auth_bean.passcode
+        health_check.lanplus = auth_bean.lantype
+
+        try:
+            # Execute ipmitool commands
+            sel_cmd = [
+                "ipmitool", "-H", ip,
+                "-I", health_check.lanplus,
+                "-U", health_check.user_name,
+                "-P", health_check.password,
+                "sel", "elist"
+            ]
+            sel_cmd_result = subprocess.run(sel_cmd, capture_output=True, text=True).stdout
+
+            sdr_cmd = [
+                "ipmitool", "-H", ip,
+                "-I", health_check.lanplus,
+                "-U", health_check.user_name,
+                "-P", health_check.password,
+                "sdr", "elist", "all"
+            ]
+            sdr_cmd_result = subprocess.run(sdr_cmd, capture_output=True, text=True).stdout
+
+            # Check command output format
+            if "|" not in sel_cmd_result and "|" not in sdr_cmd_result:
+                health_check.health_report.ip = ip
+                health_check.health_report.product_name = auth_bean.type
+                health_check.result = False
+                health_check.message = "sel or sdr format error."
+                health_check.health_report.health_status = "fail"
+                health_check.health_report.code = 2
+                health_check.health_report.exec_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                health_check.health_report.chassis_num = "-"
+                health_check.health_report.payload_num = "-"
+                return health_check
+
+            sel_lines = [line.strip() for line in sel_cmd_result.split('\n') if line.strip()]
+            if not sel_lines:
+                health_check.result = False
+                health_check.health_report.health_status = "fail"
+                health_check.health_report.code = 2
+                health_check.message = "no sel log."
+                return health_check
+
+            # Process SEL logs
+            clear_item = "Pre-Init"
+            first_index = len(sel_lines) - 1
+            for i in range(len(sel_lines)-1, -1, -1):
+                if clear_item not in sel_lines[i]:
+                    first_index = i
+                    break
+
+            first_date_str = sel_lines[first_index].split("|")[1].strip()
+
+            if clear_item in first_date_str:
+                health_check.health_report.ip = ip
+                health_check.health_report.product_name = auth_bean.type
+                health_check.result = True
+                health_check.message = "The system log collected do not contain a timestamp, no support patrol."
+                health_check.health_report.health_status = "invalid"
+                health_check.health_report.code = 1
+                health_check.health_report.exec_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                health_check.health_report.chassis_num = "-"
+                health_check.health_report.payload_num = "-"
+                return health_check
+
+            # Check for log clear events
+            log_clear_pattern = r"^(.*Log area reset/cleared.*)$"
+            clear_index = None
+            for i, line in enumerate(sel_lines):
+                if re.match(log_clear_pattern, line):
+                    clear_index = i
+                    break
+
+            # Load YAML config
+            with open(filter, 'r') as f:
+                filter_config = yaml.safe_load(f)
+
+            log_clear_time = filter_config.get('logClearTime', '0')
+            date_format = "%m/%d/%Y"
+            first_date = datetime.strptime(first_date_str, date_format)
+
+            if clear_index is not None:
+                last_date_str = sel_lines[clear_index].split("|")[1].strip()
+                if clear_item not in last_date_str:
+                    last_date = datetime.strptime(last_date_str, date_format)
+                    days_diff = (first_date - last_date).days
+                    if days_diff < int(log_clear_time):
+                        health_check.health_report.ip = ip
+                        health_check.health_report.product_name = auth_bean.type
+                        health_check.result = True
+                        health_check.message = f"The system log collected is less than {log_clear_time} day old, no support patrol."
+                        health_check.health_report.health_status = "invalid"
+                        health_check.health_report.code = 1
+                        health_check.health_report.exec_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        health_check.health_report.chassis_num = "-"
+                        health_check.health_report.payload_num = "-"
+                        return health_check
+
+            # Filter SEL logs by validity time
+            validity_time = -int(filter_config.get('selValidityTime', '0'))
+            time_threshold = first_date + timedelta(days=validity_time)
+
+            target_list = []
+            for line in reversed(sel_lines):
+                if clear_item in line:
+                    continue
+                if "|" not in line:
+                    continue
+
+                line_date_str = line.split("|")[1].strip()
+                line_date = datetime.strptime(line_date_str, date_format)
+                if line_date < time_threshold:
+                    break
+                target_list.append(line)
+
+            # Process chassis filters
+            ch_filter = filter_config.get('chassis', [])
+            ch_filter_list = []
+            for item in ch_filter:
+                for sensor_line in target_list:
+                    if re.match(item, sensor_line):
+                        parts = sensor_line.split("|")
+                        sensor = parts[3].strip()
+                        event = parts[4].strip()
+                        value = f"{sensor}|{event}"
+                        ch_filter_list.append(value)
+
+            # Deduplicate chassis events
+            chassis_set = set(ch_filter_list)
+            end_chassis_list = list(chassis_set)
+            chassis_num = 0
+
+            if ch_filter_list:
+                for item in end_chassis_list:
+                    hnd = HealthNodeDetail()
+                    hnd.item = item.split("|")[0].strip()
+                    hnd.status = "chassis"
+                    hnd.value = item.split("|")[1].strip()
+                    health_check.health_details.append(hnd)
+                    chassis_num += 1
+
+            # Process payload filters
+            pay_filter = filter_config.get('payload', [])
+            pay_filter_list = []
+            date_map = {}
+
+            for item in pay_filter:
+                for sensor_line in target_list:
+                    if re.match(item, sensor_line):
+                        parts = sensor_line.split("|")
+                        sensor = parts[3].strip()
+                        event = parts[4].strip()
+                        value = f"{sensor}|{event}"
+                        pay_filter_list.append(value)
+                        if value not in date_map:
+                            date_map[value] = parts[1].strip()
+
+            # Count occurrences
+            count_map = {}
+            for item in pay_filter_list:
+                count_map[item] = count_map.get(item, 0) + 1
+
+            # Deduplicate and filter payload events
+            payload_set = set(pay_filter_list)
+            end_payload_list = list(payload_set)
+
+            # Remove items with more than 8 occurrences
+            end_payload_list = [item for item in end_payload_list if count_map.get(item, 0) <= 8]
+
+            # Process SDR data
+            sdr_lines = [line.strip() for line in sdr_cmd_result.split('\n') if line.strip()]
+            payload_num = 0
+
+            for item in end_payload_list:
+                sensor_part = item.split("|")[0]
+                key = sensor_part.split()[-1].strip()
+                value = item.split("|")[1]
+
+                found = False
+                for sdr_line in sdr_lines:
+                    if "|" not in sdr_line:
+                        continue
+
+                    sdr_parts = sdr_line.split("|")
+                    if sdr_parts[0].strip() == key:
+                        event_date_str = date_map.get(item)
+                        event_date = datetime.strptime(event_date_str, date_format)
+
+                        if sdr_parts[2].strip().lower() in ["ok", "ns"]:
+                            sdr_event = sdr_parts[4].strip()
+                            if value in sdr_event:
+                                hnd = HealthNodeDetail()
+                                hnd.item = item.split("|")[0].strip()
+                                hnd.status = "payload"
+                                hnd.value = sdr_event
+                                health_check.health_details.append(hnd)
+                                payload_num += 1
+                                found = True
+                                break
+                            elif sdr_event == "Event-only":
+                                event_time_threshold = first_date - timedelta(days=21)
+                                if event_date < event_time_threshold:
+                                    hnd = HealthNodeDetail()
+                                    hnd.item = item.split("|")[0].strip()
+                                    hnd.status = "payload"
+                                    hnd.value = sdr_event
+                                    health_check.health_details.append(hnd)
+                                    payload_num += 1
+                                    found = True
+                                break
+                            elif sdr_event == "No Reading":
+                                event_time_threshold = first_date - timedelta(days=28)
+                                if event_date < event_time_threshold:
+                                    hnd = HealthNodeDetail()
+                                    hnd.item = item.split("|")[0].strip()
+                                    hnd.status = "payload"
+                                    hnd.value = sdr_event
+                                    health_check.health_details.append(hnd)
+                                    payload_num += 1
+                                    found = True
+                                break
+                        else:
+                            event_time_threshold = first_date - timedelta(days=7)
+                            if event_date < event_time_threshold:
+                                hnd = HealthNodeDetail()
+                                hnd.item = item.split("|")[0].strip()
+                                hnd.status = "payload"
+                                hnd.value = item.split("|")[1].strip()
+                                health_check.health_details.append(hnd)
+                                payload_num += 1
+                                found = True
+                            break
+
+                if not found:
+                    hnd = HealthNodeDetail()
+                    hnd.item = item.split("|")[0].strip()
+                    hnd.status = "payload"
+                    hnd.value = item.split("|")[1].strip()
+                    health_check.health_details.append(hnd)
+                    payload_num += 1
+
+            # Set final report values
+            health_check.health_report.ip = ip
+            health_check.health_report.product_name = auth_bean.type
+            health_check.health_report.exec_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            health_check.health_report.chassis_num = str(chassis_num)
+            health_check.health_report.payload_num = str(payload_num)
+
+            if chassis_num == 0 and payload_num == 0:
+                health_check.health_report.health_status = "ok"
+                health_check.health_report.code = 4
+            else:
+                health_check.health_report.health_status = "warning"
+                health_check.health_report.code = 3
+
+            health_check.result = True
+
+        except Exception as e:
+            health_check.health_report.health_status = "fail"
+            health_check.health_report.code = 2
+            health_check.health_report.exec_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            health_check.result = False
+            health_check.health_report.chassis_num = "-"
+            health_check.health_report.payload_num = "-"
+            health_check.health_report.ip = ip
+            health_check.health_report.product_name = auth_bean.type
+            health_check.message = "health check failed." + str(e)
+
+        return health_check
 
 class DICTVALUE():
 
@@ -9073,6 +9382,24 @@ class CommonM5(Base):
             res.Message(result.Message)
         RestFunc.logout(client)
         return res
+
+    def healthCheck(self, client, args):
+        result = ResultBean()
+        health = NewHealth()
+        res = health.perform(client)
+        json = vars(res.health_report)
+        items = []
+        json['details'] = items
+        if res.result == False:
+            json['msg'] = res.message
+        for item in res.health_details:
+            items.append(vars(item))
+        if json['health_status'] == 'fail':
+            result.State("Failure")
+        else:
+            result.State("Success")
+        result.Message(json)
+        return result
 
     def _validate_64_str(self, input_str):
         pattern = '^[a-zA-Z0-9\-\_\. ]{1,64}$'

@@ -1516,6 +1516,12 @@ class Base(IBase):
         result.Message([])
         return result
 
+    def healthCheck(self, client, args):
+        result = ResultBean()
+        result.State("Not Support")
+        result.Message([])
+        return result
+
 # Ascii转十六进制
 
 

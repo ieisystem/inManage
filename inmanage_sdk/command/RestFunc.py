@@ -2812,50 +2812,88 @@ def login_M6(client):
         headers = {}
         flag = IpmiFunc.judge_encrypt(client)
         if flag == 1:
-            randomtag = client.request("GET", "api/randomtag", data=None, json=None)
-            if randomtag is not None and randomtag.status_code == 200 and 'random' in randomtag.json():
-                data = {
-                    "username": Encrypt(client.username),
-                    "password": Encrypt(client.passcode),
-                    "encrypt_flag": 1,
-                    "login_tag": randomtag.json().get('random')
-                }
-                response = client.request("POST", "api/session", data=data)
-                if response is not None and response.status_code in range(200, 300):
-                    encrypt_type_flag = 2
-                    headers = {
-                        "X-CSRFToken": response.json()["CSRFToken"],
-                        "Cookie": response.headers["set-cookie"]
-                    }
-                else:
-                    # M6 好像也没有RSA加密方式
+            if str(client.type) == "M7":
+                headers = login_M7(client)
+            else:
+                randomtag = client.request("GET", "api/randomtag", data=None, json=None)
+                if randomtag is not None and randomtag.status_code in range(200, 300) and 'random' in randomtag.json():
                     data = {
-                        "username": encrypt_rsa(client.username, client.type),
-                        "password": encrypt_rsa(client.passcode, client.type),
+                        "username": Encrypt(client.username),
+                        "password": Encrypt(client.passcode),
                         "encrypt_flag": 1,
                         "login_tag": randomtag.json().get('random')
                     }
                     response = client.request("POST", "api/session", data=data)
                     if response is not None and response.status_code in range(200, 300):
-                        encrypt_type_flag = 1
+                        encrypt_type_flag = 2
                         headers = {
                             "X-CSRFToken": response.json()["CSRFToken"],
                             "Cookie": response.headers["set-cookie"]
                         }
+                    else:
+                        data = {
+                            "username": encrypt_rsa(client.username, client.type),
+                            "password": encrypt_rsa(client.passcode, client.type),
+                            "encrypt_flag": 1,
+                            "login_tag": randomtag.json().get('random')
+                        }
+                        response = client.request("POST", "api/session", data=data)
+                        if response is not None and response.status_code in range(200, 300):
+                            encrypt_type_flag = 1
+                            headers = {
+                                "X-CSRFToken": response.json()["CSRFToken"],
+                                "Cookie": response.headers["set-cookie"]
+                            }
         else:
             data = {
                 "username": client.username,
                 "password": client.passcode,
             }
             response = client.request("POST", "api/session", data=data)
-            if response is not None and response.status_code == 200:
+            if response is not None and response.status_code in range(200, 300):
                 encrypt_type_flag = 0
                 headers = {
                     "X-CSRFToken": response.json()["CSRFToken"],
                     "Cookie": response.headers["set-cookie"]
                 }
     except:
+        logger.operationLog.error("login failed.", exc_info=True)
         headers = {}
+    return headers
+
+
+def login_M7(client):
+    global encrypt_type_flag
+    headers = {}
+    randomtag = client.request("GET", "api/randomtag", data=None, json=None)
+    if randomtag is not None and randomtag.status_code in range(200, 300) and 'random' in randomtag.json():
+        data = {
+            "username": encrypt_rsa(client.username, client.type),
+            "password": encrypt_rsa(client.passcode, client.type),
+            "encrypt_flag": 1,
+            "login_tag": randomtag.json().get('random')
+        }
+        response = client.request("POST", "api/session", data=data)
+        if response is not None and response.status_code in range(200, 300):
+            encrypt_type_flag = 1
+            headers = {
+                "X-CSRFToken": response.json()["CSRFToken"],
+                "Cookie": response.headers["set-cookie"]
+            }
+        else:
+            data = {
+                "username": Encrypt(client.username),
+                "password": Encrypt(client.passcode),
+                "encrypt_flag": 1,
+                "login_tag": randomtag.json().get('random')
+            }
+            response = client.request("POST", "api/session", data=data)
+            if response is not None and response.status_code in range(200, 300):
+                encrypt_type_flag = 2
+                headers = {
+                    "X-CSRFToken": response.json()["CSRFToken"],
+                    "Cookie": response.headers["set-cookie"]
+                }
     return headers
 
 

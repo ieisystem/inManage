@@ -190,8 +190,9 @@ class HostTypeClient():
             version_index = str(version).find('(')
             if version_index != -1:
                 version = str(version)[:version_index].strip()
+            bmcVersion = str(int(version.split(".")[0], 16)) + "." + str(int(version.split(".")[1], 16)).zfill(3) + str(version.split(".")[2]).zfill(3)
             res['State'] = "Success"
-            res['Message'] = version
+            res['Message'] = bmcVersion
         else:
             res['State'] = "Failure"
             res['Message'] = ["cannot get Bmc version."]
