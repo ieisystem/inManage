@@ -1,0 +1,40 @@
+    chassis:
+     - ^(.*Temperature Inlet_Temp.*Upper Critical going high.*)$
+     - ^(.*Time_SYNC_Fail.* Transition to Non-critical from OK.*)$
+    payload:
+     - ^(.*Processor.* IERR.*)$
+     - ^(.*Processor.* CATERR.*)$
+     - ^(.*Processor.* FRB2/Hang.*)$
+     - ^(.*Processor.* Configuration Error.*)$
+     - ^(.*Power.* AC lost.*)$
+     - ^(.*Power.* Insufficient Resources.*)$
+     - ^(.*Power.* Failure detected.*)$
+     - ^(.*Power.* Predictive failure.*)$
+     - ^(.*Power.* Config Error.*)$
+     - ^(.*Drive Slot.* Drive Fault.*)$
+     - ^(.*Drive Slot.* Predictive Failure.*)$
+     - ^(.*Event Logging Disabled.* Log full.*)$
+     - ^(.*Event Logging Disabled.* Log almost full.*)$
+     - ^(.*Watchdog 2.* Timer expired.*)$
+     - ^(.*Watchdog 2.* Power cycle.*)$
+     - ^(.*Management Subsys.*Health ME_FW_Status.* Management controller unavailable.*)$
+     - ^(.*Management Subsys.*Health.* Sensor failure.*)$
+     - ^(.*Management Subsys.*Health.* Controller access degraded or unavailable.*)$
+     - ^(.*Critical Interrupt.* Bus Fatal Error.*)$
+     - ^(.*Critical Interrupt.* Bus Uncorrectable Error.*)$
+     - ^(.*Critical Interrupt.* PCI SERR.*)$
+     - ^(.*Critical Interrupt.* Interrupt.*)$
+     - ^(.*OS Stop/Shutdown.* Run-time critical stop.*)$
+     - ^(.*pcieport.* Uncorrected error.*)$
+     - ^(.*Fan.* going low.*)$
+     - ^(.*Fan.* Device Absent.*)$
+     - ^(.*Temperature.* Upper Critical going high.*)$
+     - ^(.*Temperature.* Non-Recoverable.*)$
+     - ^(.*Voltage.* Non-Recoverable.*)$
+     - ^(.*Processor.* Thermal Trip.*)$
+     - ^(.*Processor.* Throttled.*)$
+     - ^(.*Memory.* Throttled.*)$
+     - ^(.*Memory.* Correctable ECC.*)$
+     - ^(.*Memory.* Uncorrectable ECC.*)$
+    logClearTime: "1"
+    selValidityTime: "10"

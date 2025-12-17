@@ -12229,6 +12229,30 @@ class CommonM6(Base):
         RestFunc.logout(client)
         return res
 
+    def healthCheck(self, client, args):
+        alarm_res = ResultBean()
+        headers = RestFunc.login_M6(client)
+        if headers == {}:
+            alarm_res.State("Failure")
+            alarm_res.Message(["login error, please check username/password/port"])
+            return alarm_res
+        client.setHearder(headers)
+        log_res = RestFunc.getAlertLog(client)
+        if log_res == {}:
+            alarm_res.State("Failure")
+            alarm_res.Message(["can not get current alarms."])
+        elif log_res.get('code') == 0 and log_res.get('data') is not None:
+            result = log_res.get('data')
+            alarm_res.State("Success")
+            alarm_res.Message([result])
+        else:
+            result = log_res.get('data')
+            alarm_res.State("Failure")
+            alarm_res.Message([result])
+        RestFunc.logout(client)
+        return alarm_res
+
+
 # 检查日志进度，进度到100 后下载文件
 def getProgressAndDown(client, args):
     bmcres = ResultBean()

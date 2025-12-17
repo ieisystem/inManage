@@ -8528,6 +8528,31 @@ class CommonM8(Base):
                 newlog.write(str(log_dict))
         return log_path
 
+    def healthCheck(self, client, args):
+        url_result = self.get_url_info("getcurrentalarms")
+        result = RedfishTemplate.get_for_object_single(client, url_result.get('url')+"?$top=1900")
+        res = ResultBean()
+        if result.State:
+            info = result.Message.get("Members", [])
+            data_sum = []
+            for item in info:
+                single_data = collections.OrderedDict()
+                single_data['id'] = item.get('Id', "N/A")
+                single_data['timestamp'] = item.get('Created', "N/A")
+                single_data['severity'] = item.get('Severity', "N/A")
+                single_data['desc'] = item.get('Message', "N/A")
+                oem = item.get("Oem", {}).get('Public', {})
+                single_data['errorCode'] = oem.get('EventCode', 'N/A')
+                single_data['type'] = oem.get('DeviceType', 'N/A')
+                single_data['adviser'] = oem.get('HandlingSuggestion', 'N/A')
+                data_sum.append(single_data)
+            res.State("Success")
+            res.Message(data_sum)
+        else:
+            res.State("Failure")
+            res.Message(result.Message)
+        return res
+
     def clearauditlog(self, client, args):
         result = ResultBean()
         result.State("Not Support")
