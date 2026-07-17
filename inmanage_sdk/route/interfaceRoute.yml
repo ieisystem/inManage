@@ -33,4 +33,7 @@ I24M6:
 CommonM8:
   platform: M8
   common: CommonM8
+OpenBmcM7:
+  platform: M7
+  common: OpenBmcM7
 
