@@ -4,13 +4,11 @@ from __future__ import (absolute_import, division, print_function)
 
 __metaclass__ = type
 
-import ctypes
-import json
+
 import sys
 import re
 import os
 import math
-import platform
 import time
 
 sys.path.append(os.path.dirname(sys.path[0]))
@@ -1354,18 +1352,6 @@ def getBoardInfo(client):
     cmd_get = "raw 0x3c 0x0a 0x00"
     return getLineRawByIpmi(client, cmd_get)
 
-def ACCycleG7(client):
-    cmd1 = '0x3c 0x28 0xff 0xfc'
-    cmd2 = '0x3c 0x28 0xff 0xfd'
-    res = sendRawByIpmi(client, cmd1)
-    if res.get("code") == 0:
-        import time
-        time.sleep(10)
-        res2 = sendRawByIpmi(client, cmd2)
-        return res2
-    else:
-        return res
-
 def getStatus(client, ctrlindex):
     for num in range(0, 600):
         cmd = "raw 0x3c 0xb9 0x05 0x00 " + hex(int(ctrlindex))
@@ -1394,11 +1380,11 @@ def getStatus(client, ctrlindex):
         return 6
 
 def checkPlatform(client):
-    cmd_h = "0x3c 0x42 0x01"
+    cmd_h = " raw 0x3c 0x42 0x01"
     res = __getCmd_type(client, cmd_h, 'readline')
     ptdict = {}
     if res.get('code') == 0 and res.get('data'):
-        data = str(res.get('data')).replace("\n", "").split(" ")
+        data = str(res.get('data')).replace("\n", "").strip().split(" ")
         ptdict["cpu"] = data[1]
         ptdict["soc"] = data[2]
         ptdict["bmc"] = data[3]

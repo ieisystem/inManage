@@ -6,7 +6,6 @@ import re
 import json
 import html
 import os
-import time
 from inmanage_sdk.interface import utoolUtil
 from inmanage_sdk.interface.ResEntity import (
     ResultBean,
@@ -21,21 +20,16 @@ from inmanage_sdk.interface.ResEntity import (
     NicPort,
     NICBean,
     NicAllBean,
-    UpTimeBean,
-    NetBean,
-    IPv4Bean,
-    IPv6Bean,
-    FruBean,
-    vlanBean
+    FruBean
 )
-from inmanage_sdk.interface.Base import (Base, ascii2hex, hexReverse)
+from inmanage_sdk.interface.Base import Base
 from inmanage_sdk.util import RedfishTemplate, RegularCheckUtil
 from inmanage_sdk.command import RestFunc, IpmiFunc
 
 
-class CommonM8(Base):
+class OpenBmcM7(Base):
 
-    def get_url_info(self, key, name="CommonM8"):
+    def get_url_info(self, key, name="CommonM7"):
         import yaml
         import os
         url_path = os.path.join(os.path.abspath(os.path.dirname(os.path.dirname(__file__))), "command",
@@ -182,23 +176,6 @@ class CommonM8(Base):
         if data:
             fulldata["SmtpCfg"] = data
 
-        # if args.destinationid:
-        #     dest = {}
-        #     dest['Id'] = args.destinationid
-        #     if args.enabled:
-        #         dest['Enabled'] = bool_dict[args.enabled]
-        #     if args.address:
-        #         dest['EmailAddress'] = args.address
-        #     if args.description is not None:
-        #         if len(args.description) > 111:
-        #             return ResultBean.fail('the length of serverPort should between 1 and 65535.')
-        #         dest['Description'] = args.description
-        #     fulldata["SmtpDestCfg"] = [dest]
-        # if not fulldata:
-        #     res.State('Failure')
-        #     res.Message("Nothing to set.")
-        #     return res
-
         url_result = self.get_url_info(sys._getframe().f_code.co_name)
         patchbody = {}
         patchbody["url"] = url_result.get('url')
@@ -229,9 +206,6 @@ class CommonM8(Base):
                     if current_smtp_dest["Enabled"] is False:
                         current_smtp_dest = {"Id": data.get("Id") - 1 ,"Enabled": False}
                         current_smtp_dests = [current_smtp_dest]
-            # DestIndex 为SmtpDestCfg的下标，现在list只有一个 所以就是0
-            # ami
-            # patch_body = {"SmtpDestCfg": current_smtp_dests, "DestIndex": data.get("Id") - 1, "SmtpCfg":{'SenderAddr': 'admin@inspur.com', "EventLevel": "Info"}}
             patch_body = {"SmtpDestCfg": current_smtp_dests, "DestIndex": data.get("Id") - 1}
             return ResultBean.success(patch_body)
 
@@ -251,7 +225,6 @@ class CommonM8(Base):
                 return ResultBean.fail('the length of serverPort should between 1 and 65535.')
             data['Description'] = args.description
 
-        # url_result = self.get_url_info(sys._getframe().f_code.co_name)
         url_result = self.get_url_info("setsmtpcom")
         patchbody = {}
         patchbody["url"] = url_result.get('url')
@@ -1001,358 +974,6 @@ class CommonM8(Base):
             res.Message(result.Message)
         return res
 
-    def getnetwork(self, client, args):
-        res = ResultBean()
-        url_result = self.get_url_info(sys._getframe().f_code.co_name)
-        # 获取网口类型
-        result_type = RedfishTemplate.get_for_object(client, [url_result.get('url')])
-        interface_type = {}
-        if result_type.State and result_type.Message.get(url_result.get('url')).State:
-            interface_type = {member.get('@odata.id'): member.get('type') for member in
-                              result_type.Message.get(url_result.get('url')).Message.get('Members', [])}
-            # 获取网口具体信息
-            result = RedfishTemplate.get_for_collection_object(client, url_result.get('url'))
-            if result.State:
-                networks = result.Message
-                data = []
-                channel_dict = {
-                    "shared": "8",  # eth1
-                    "dedicated": "1",  # eth0
-                    "bond": "1"  # eth0
-                }
-                for network in networks:
-                    single_data = collections.OrderedDict()
-                    single_data['InterfaceName'] = network.get('Id', 'N/A')
-                    single_data['ChannelNum'] = channel_dict.get(interface_type.get(network.get('@odata.id', 'N/A'), 'N/A'), "N/A")
-                    single_data['LanChannel'] = interface_type.get(network.get('@odata.id', 'N/A'), 'N/A')
-                    single_data['MACAddress'] = network.get('PermanentMACAddress', 'N/A')
-                    ipv4_dhcp = network.get('IPv4Addresses', [])[0].get('AddressOrigin', 'N/A') if network.get('IPv4Addresses', []) else 'N/A'
-                    if ipv4_dhcp is not None and ipv4_dhcp != "N/A":
-                        ipv4_dhcp = str(ipv4_dhcp).lower()
-                    single_data['Ipv4DhcpEnable'] = ipv4_dhcp
-                    single_data['Ipv4Address'] = network.get('IPv4Addresses', [])[0].get('Address', 'N/A') if network.get('IPv4Addresses', []) else 'N/A'
-                    single_data['Ipv4Subnet'] = network.get('IPv4Addresses', [])[0].get('SubnetMask', 'N/A') if network.get('IPv4Addresses', []) else 'N/A'
-                    single_data['Ipv4Gateway'] = network.get('IPv4Addresses', [])[0].get('Gateway', 'N/A') if network.get('IPv4Addresses', []) else 'N/A'
-
-                    ipv6_dhcp = network.get('DHCPv6', {}).get('OperatingMode', 'N/A') if network.get('DHCPv6', {}) else 'N/A'
-                    if ipv6_dhcp is not None and ipv6_dhcp != "N/A":
-                        if "stateful" in str(ipv6_dhcp).lower():
-                            ipv6_dhcp = "dhcp"
-                            single_data['Ipv6DhcpEnable'] = ipv6_dhcp
-                            dhcpAddress = network.get('IPv6Addresses', [])
-                            count = 1
-                            self.buildIPv6(count, dhcpAddress, single_data)
-                            gateways = network.get('Oem', {}).get("Public", {}).get('IPv6DefaultGateways', [])
-                            count = 1
-                            for gateway in gateways:
-                                single_data['Ipv6Gateway' + str(count)] = gateway.get('Address', 'N/A') if gateway.get('Address', 'N/A') else 'N/A'
-                                count += 1
-                        elif "disabled" in str(ipv6_dhcp).lower():
-                            ipv6_dhcp = "static"
-                            single_data['Ipv6DhcpEnable'] = ipv6_dhcp
-                            dhcpAddress = network.get('IPv6Addresses', [])
-                            count = 1
-                            count = self.buildIPv6(count, dhcpAddress, single_data)
-                            staticAddress = network.get('IPv6StaticAddresses', [])
-                            self.buildIPv6(count, staticAddress, single_data)
-                            gateways = network.get('IPv6StaticDefaultGateways', [])
-                            count = 1
-                            for gateway in gateways:
-                                single_data['Ipv6Gateway' + str(count)] = gateway.get('Address', 'N/A') if gateway.get('Address', 'N/A') else 'N/A'
-                                count += 1
-
-                    single_data['VlanEnable'] = "enable" if network.get('VLAN', {}).get('VLANEnable', 'N/A') is True else "disable"
-                    single_data['VlanId'] = network.get('VLAN', {}).get('VLANId', 'N/A')
-                    data.append(single_data)
-                res.State('Success')
-                res.Message(data)
-            else:
-                res = result
-        elif not result_type.State:
-            res.Message(result_type.Message)
-        elif not result_type.Message.get(url_result.get('url')).State:
-            res.Message(result_type.Message.get(url_result.get('url')).Message)
-        return res
-
-    def buildIPv6(self, count, dhcpAddress, single_data):
-        for addresss in dhcpAddress:
-            single_data['Ipv6Address' + str(count)] = addresss.get('Address', 'N/A') if addresss else 'N/A'
-            single_data['Ipv6Prefix' + str(count)] = addresss.get('PrefixLength', 'N/A') if addresss else 'N/A'
-            single_data['Ipv6Origin' + str(count)] = addresss.get('AddressOrigin', 'N/A') if addresss else 'N/A'
-            count += 1
-        return count
-
-    def setnet(self, client, args):
-        res = ResultBean()
-        res.State("Not Support")
-        res.Message(["Not Support"])
-        return res
-
-    def setipv4(self, client, args):
-        ipinfo = ResultBean()
-        interface_dict = {
-            "shared": "eth1",
-            "dedicated": "eth0",
-            "bond0": "bond1"
-        }
-        url_result = self.get_url_info('getnetwork')
-        result_type = RedfishTemplate.get_for_object_single(client, url_result.get('url'))
-        interface_type = {}
-        if result_type.State:
-            interface_type = {str(member.get('@odata.id')).split("/")[-1]: member.get('@odata.id') for member in
-                              result_type.Message.get('Members', [])}
-            inter = interface_dict.get(args.interface_name, args.interface_name)
-            if inter in interface_type.keys():
-                result = RedfishTemplate.get_for_object_single(client, str(interface_type.get(inter)))
-                if result.State:
-                    enable_status = result.Message.get('Oem', {}).get('Public', {}).get('EnableStatus', None)
-                    if not enable_status:
-                        ipinfo.State("Failure")
-                        ipinfo.Message(["get network enable status error "])
-                        return ipinfo
-                else:
-                    ipinfo.State("Failure")
-                    ipinfo.Message(["get " + args.interface_name + " error "])
-                    return ipinfo
-                if args.ipv4_status == 'disable':
-                    if enable_status == 'ipv4':
-                        ipinfo.State("Failure")
-                        ipinfo.Message(["ipv6 is disable, ipv4 cannot be disable."])
-                        return ipinfo
-                    enable_status = 'ipv6'
-                else:
-                    if enable_status == 'ipv4':
-                        enable_status = 'ipv4'
-                    else:
-                        enable_status = 'both'
-                if enable_status == 'ipv6':
-                    if args.ipv4_address is not None or args.ipv4_subnet is not None or args.ipv4_gateway is not None\
-                            or args.ipv4_dhcp_enable is not None:
-                        ipinfo.State("Failure")
-                        ipinfo.Message(["ipv4 is disabled, please enable it first."])
-                        return ipinfo
-                    data = {"Oem": {"Public": {"EnableStatus": enable_status}}}
-                else:
-                    data = {"Oem": {"Public": {"EnableStatus": enable_status}}}
-                    # 启用 ipv4 默认先启用 网络 lan_enable 固定为1
-                    # IPV4 SETTING
-                    if args.ipv4_dhcp_enable == "dhcp":
-                        if args.ipv4_address is not None or args.ipv4_subnet is not None or args.ipv4_gateway is not None:
-                            ipinfo.State("Failure")
-                            ipinfo.Message(["'ip', 'subnet','gateway' is not active in DHCP mode."])
-                            return ipinfo
-                        data["IPv4Addresses"] = [{"AddressOrigin": "DHCP"}]
-                    else:
-                        static_info = {"AddressOrigin": "Static"}
-                        if args.ipv4_address is not None:
-                            if RegularCheckUtil.checkIP(args.ipv4_address):
-                                ipv4_address = args.ipv4_address
-                            else:
-                                ipinfo.State("Failure")
-                                ipinfo.Message(["Invalid IPv4 IP address."])
-                                return ipinfo
-                            static_info["Address"] = ipv4_address
-                        if args.ipv4_subnet is not None:
-                            if RegularCheckUtil.checkSubnetMask(args.ipv4_subnet):
-                                ipv4_subnet = args.ipv4_subnet
-                            else:
-                                ipinfo.State("Failure")
-                                ipinfo.Message(["Invalid IPv4 subnet mask."])
-                                return ipinfo
-                            static_info["SubnetMask"] = ipv4_subnet
-                        if args.ipv4_gateway is not None:
-                            if RegularCheckUtil.checkIP(args.ipv4_gateway):
-                                ipv4_gateway = args.ipv4_gateway
-                            else:
-                                ipinfo.State("Failure")
-                                ipinfo.Message(["Invalid IPv4 default gateway."])
-                                return ipinfo
-                            static_info["Gateway"] = ipv4_gateway
-                        data["IPv4Addresses"] = [static_info]
-                patchBody = {}
-                patchBody['url'] = str(interface_type.get(inter))
-                patchBody['json'] = data
-                set_result = RedfishTemplate.patch_for_object(client, patchBody)
-                if set_result.State:
-                    ipinfo.State('Success')
-                    ipinfo.Message('')
-                else:
-                    ipinfo.State('Failure')
-                    ipinfo.Message(str(set_result.Message))
-                return ipinfo
-            else:
-                ipinfo.State("Failure")
-                ipinfo.Message(["get " + args.interface_name + " error "])
-                return ipinfo
-        else:
-            ipinfo.State("Failure")
-            ipinfo.Message(["get " + args.interface_name + " error "])
-            return ipinfo
-
-
-    def setipv6(self, client, args):
-        ipinfo = ResultBean()
-        if not args.ipv6_status:
-            ipinfo.State("Failure")
-            ipinfo.Message(["The ipv6_status settings is not supported."])
-            return ipinfo
-        interface_dict = {
-            "shared": "eth1",
-            "dedicated": "eth0",
-            "bond0": "bond1"
-        }
-        url_result = self.get_url_info('getnetwork')
-        result_type = RedfishTemplate.get_for_object_single(client, url_result.get('url'))
-        interface_type = {}
-        if result_type.State:
-            interface_type = {str(member.get('@odata.id')).split("/")[-1]: member.get('@odata.id') for member in
-                              result_type.Message.get('Members', [])}
-            inter = interface_dict.get(args.interface_name, args.interface_name)
-            if inter in interface_type.keys():
-                result = RedfishTemplate.get_for_object_single(client, str(interface_type.get(inter)))
-                if result.State:
-                    enable_status = result.Message.get('Oem', {}).get('Public', {}).get('EnableStatus', None)
-                    if not enable_status:
-                        ipinfo.State("Failure")
-                        ipinfo.Message(["get network enable status error "])
-                        return ipinfo
-                else:
-                    ipinfo.State("Failure")
-                    ipinfo.Message(["get " + args.interface_name + " error "])
-                    return ipinfo
-                if args.ipv6_status == 'disable':
-                    if enable_status == 'ipv6':
-                        ipinfo.State("Failure")
-                        ipinfo.Message(["ipv4 is disable, ipv6 cannot be disable."])
-                        return ipinfo
-                    enable_status = 'ipv4'
-                else:
-                    if enable_status == 'ipv6':
-                        enable_status = 'ipv6'
-                    else:
-                        enable_status = 'both'
-                if enable_status == 'ipv4':
-                    if args.ipv6_address is not None or args.ipv6_index is not None or args.ipv6_gateway is not None\
-                            or args.ipv6_prefix is not None or args.ipv6_dhcp_enable is not None:
-                        ipinfo.State("Failure")
-                        ipinfo.Message(["ipv6 is disabled, please enable it first."])
-                        return ipinfo
-                    data = {"Oem": {"Public": {"EnableStatus": enable_status}}}
-                else:
-                    data = {"Oem": {"Public": {"EnableStatus": enable_status}}}
-                    # 启用 ipv6 默认先启用 网络 lan_enable 固定为1
-                    # IPV6 SETTING
-                    if args.ipv6_dhcp_enable == "dhcp":
-                        if args.ipv6_address is not None or args.ipv6_index is not None or args.ipv6_gateway is not None\
-                                or args.ipv6_prefix is not None:
-                            ipinfo.State("Failure")
-                            ipinfo.Message(
-                                ["'ip', 'index','Subnet prefix length','gateway' is not active in DHCP mode."])
-                            return ipinfo
-                        data["IPv6Addresses"] = [{"AddressOrigin": "DHCPv6"}]
-                    else:
-                        static_info = {"AddressOrigin": "Static"}
-                        data["IPv6Addresses"] = [static_info]
-                        if args.ipv6_address is not None:
-                            if RegularCheckUtil.checkIPv6(args.ipv6_address):
-                                ipv6_address = args.ipv6_address
-                            else:
-                                ipinfo.State("Failure")
-                                ipinfo.Message(["Invalid IPv6 IP address."])
-                                return ipinfo
-                            static_info["Address"] = ipv6_address
-                        if args.ipv6_gateway is not None:
-                            if RegularCheckUtil.checkIPv6(args.ipv6_gateway):
-                                ipv6_gateway = args.ipv6_gateway
-                            else:
-                                ipinfo.State("Failure")
-                                ipinfo.Message(["Invalid IPv6 default gateway."])
-                                return ipinfo
-                            gateway = {"Address": ipv6_gateway}
-                            data["IPv6StaticDefaultGateways"] = [gateway]
-                        if args.ipv6_index is not None:
-                            if RegularCheckUtil.checkIndex(args.ipv6_index):
-                                ipv6_index = args.ipv6_index
-                            else:
-                                ipinfo.State("Failure")
-                                ipinfo.Message(["Invalid IPv6 index(0-15)."])
-                                return ipinfo
-                        if args.ipv6_prefix is not None:
-                            if RegularCheckUtil.checkPrefix(args.ipv6_prefix):
-                                ipv6_prefix = args.ipv6_prefix
-                            else:
-                                ipinfo.State("Failure")
-                                ipinfo.Message(["Invalid IPv6 Subnet prefix length(0-128)."])
-                                return ipinfo
-                            static_info["PrefixLength"] = ipv6_prefix
-                patchBody = {}
-                patchBody['url'] = str(interface_type.get(inter))
-                patchBody['json'] = data
-                set_result = RedfishTemplate.patch_for_object(client, patchBody)
-                if set_result.State:
-                    ipinfo.State('Success')
-                    ipinfo.Message('')
-                else:
-                    ipinfo.State('Failure')
-                    ipinfo.Message(str(set_result.Message))
-                return ipinfo
-            else:
-                ipinfo.State("Failure")
-                ipinfo.Message(["get " + args.interface_name + " error "])
-                return ipinfo
-        else:
-            ipinfo.State("Failure")
-            ipinfo.Message(["get " + args.interface_name + " error "])
-            return ipinfo
-
-    def setvlan(self, client, args):
-        ipinfo = ResultBean()
-        interface_dict = {
-            "shared": "eth1",
-            "dedicated": "eth0"
-        }
-        url_result = self.get_url_info('getnetwork')
-        result_type = RedfishTemplate.get_for_object_single(client, url_result.get('url'))
-        interface_type = {}
-        if result_type.State:
-            interface_type = {str(member.get('@odata.id')).split("/")[-1]: member.get('@odata.id') for member in
-                              result_type.Message.get('Members', [])}
-            inter = interface_dict.get(args.interface_name, args.interface_name)
-            if inter in interface_type.keys():
-                if args.vlan_status == "disable":
-                    if args.vlan_id is not None or args.vlan_priority is not None:
-                        ipinfo.State("Failure")
-                        ipinfo.Message(["vlan is disabled, please enable it first."])
-                        return ipinfo
-                    vlan = {"VLANEnable": False}
-                else:
-                    vlan = {"VLANEnable": True}
-                    if args.vlan_id is not None:
-                        if args.vlan_id < 1 or args.vlan_id > 4094:
-                            ipinfo.State("Failure")
-                            ipinfo.Message(["vlan id should be 1-4094."])
-                            return ipinfo
-                        vlan["VLANId"] = args.vlan_id
-                patchBody = {}
-                patchBody['url'] = str(interface_type.get(inter))
-                patchBody['json'] = {"VLAN": vlan}
-                set_result = RedfishTemplate.patch_for_object(client, patchBody)
-                if set_result.State:
-                    ipinfo.State('Success')
-                    ipinfo.Message('')
-                else:
-                    ipinfo.State('Failure')
-                    ipinfo.Message(str(set_result.Message))
-                return ipinfo
-            else:
-                ipinfo.State("Failure")
-                ipinfo.Message(["get " + args.interface_name + " error "])
-                return ipinfo
-        else:
-            ipinfo.State("Failure")
-            ipinfo.Message(["get " + args.interface_name + " error "])
-            return ipinfo
-
     def getad(self, client, args):
         res = ResultBean()
         url_service = self.get_url_info("getuserrule")
@@ -1646,13 +1267,6 @@ class CommonM8(Base):
                 return res
         for i in range(0,len(info)):
             item = info[i]
-            # if args.id is not None:
-            #     if str(item.get("Oem").get("Public").get("id")) == args.id:
-            #         set_data = item
-            #         id = i
-            #         break
-            #
-            # else:
             # 找到空余ID可添加
             if item.get("RemoteGroup") == "":
                 set_data = item
@@ -2027,14 +1641,11 @@ class CommonM8(Base):
 
                 if args.address:
                     if RegularCheckUtil.checkIP(args.address) or RegularCheckUtil.checkIPv6(args.address):
-                        # ldapaddr = iphead + args.address + ipport
                         ipaddr = args.address
                         data_ldap['ServiceAddresses'][0] = iphead + ipaddr + ":" + ipport
 
                     else:
                         return patch_res.fail("Invalid Server Address. Please input an IPv4 or IPv6 address")
-
-                        # ldapaddr = iphead + ipaddr +":"+args.server_port
                 if len(data_ldap['ServiceAddresses']) == 1:
                     data_ldap['ServiceAddresses'][0] = data_ldap['ServiceAddresses'][0].replace("ldaps://", iphead)
                     data_ldap['ServiceAddresses'][0] = data_ldap['ServiceAddresses'][0].replace("ldap://", iphead)
@@ -2214,13 +1825,6 @@ class CommonM8(Base):
                 return res
         for i in range(0,len(info)):
             item = info[i]
-            # if args.id is not None:
-            #     if str(item.get("Oem").get("Public").get("id")) == args.id:
-            #         set_data = item
-            #         id = i
-            #         break
-            #
-            # else:
             # 找到空余ID可添加
             if item.get("RemoteGroup") == "":
                 set_data = item
@@ -2588,8 +2192,6 @@ class CommonM8(Base):
 
 
         addldurl = url_result.get('url') + "/" + str(args.ctrlId) + "/Volumes"
-
-        raid_dict = {0: "raid0", 1: "raid1", 5: "raid5", 6: "raid6", 10: "raid10"}
         stripsize_dict = {0: "32k", 1: "64k", 2: "128k", 3: "256k", 4: "512k", 5: "1024k"}
         access_dict = {1: "Read Write", 2: "Read Only", 3: "Blocked"}
         read_dict = {1: "Read Ahead", 2: "No Read Ahead"}
@@ -2719,9 +2321,6 @@ class CommonM8(Base):
 
 
     showkeydict_phy = {
-        # "Id": ['Oem', 'Huawei', 'DeviceID'],
-        # "Index": ['Oem', 'Huawei', 'DeviceID'],
-        # "Name": "Name",
         "DeviceID": None,
         "VenderID": None,
         "Manufacturer": "Manufacturer",
@@ -2733,7 +2332,6 @@ class CommonM8(Base):
         "SlotNumber": "Slot",
         "ScsiDevType": None,
         "InterfaceType": "Protocol",
-    # SPI/PCIe/AHCI/UHCI/SAS/SATA/USB/NVMe/FC/iSCSI/FCoE/NVMeOverFabrics/SMB/NFSv3/NFSv4/HTTP/HTTPS/FTP/SFTP
         "UserDataBlockSize": None,
         "EmulatedBlockSize": None,
         "PathCount": None,
@@ -2744,14 +2342,11 @@ class CommonM8(Base):
         "LinkSpeed": "CapableSpeedGbs",
         "MediaErrCount": None,
         "PredFailCount": None,
-        # UnconfiguredGood/UnconfigureBad/HotSpareDrive/Offline/Failed/Online/GettingCopied/JBOD/UnconfiguredShieded/HotSpareShielded/ConfiguredShielded/Foreign/Active/Standby/Sleep/DSTInProgress/SMARTOfflineDataCollection/SCTCommand/Rebuilding/Raw/Ready/NotSupported/PredictiveFailure/EraseInProgress
         "FwState": ["Oem", "Public", "FWState"],
         "DisableRemoval": None,
         "DdfType": None,
         "RawSize": "CapacityBytes",
         "Capacity": "CapacityBytes",
-        # "NonCoercedSize": None,
-        # "CoercedSize": None,
         "PdProgress": None,
         "ProgressRebuild": None,
         "ProgressPatrol": None,
@@ -2765,8 +2360,8 @@ class CommonM8(Base):
         "FdeCapable": None,
         "FdeEnabled": None,
         "FwDownloadAllow": None,
-        "MediaType": "MediaType",  # HDD/SSD/SMR
-        "PowerState": None,  # SpunUp/SpunDown/Transition
+        "MediaType": "MediaType",
+        "PowerState": None,
         "ConnectedPortNum": None,
         "Certified": None,
         "Props": None,
@@ -2792,13 +2387,13 @@ class CommonM8(Base):
         "BlockSize": None,
         "CapableSpeedGbs": "CapableSpeedGbs",
         "NegotiatedSpeedGbs": "NegotiatedSpeedGbs",
-        "HotspareState": None,  # None Global Dedicated AutoReplace
+        "HotspareState": None,
         "PowerOnHours": None,
         "BootDevice": None,
         "BootPriority": None,
         "RotationSpeedRPM": None,
         "FwVersion": "Revision",
-        "LedStatus": None,  # Off Blinking
+        "LedStatus": None,
         "StatusIndicator": None,
     }
 
@@ -3044,7 +2639,6 @@ class CommonM8(Base):
                 ctrlformat["Name"] = ctrlraw.get("Name")
                 StorageControllers = ctrlraw.get("StorageControllers")[0]
                 for key, value in self.showkeydict_ctrl.items():
-                    #print(key)
                     if key == "LogicalDevCnt":
                         ctrlformat[key] = lnum
                     elif key == "PhysicalDiskDevCnt":
@@ -3076,10 +2670,6 @@ class CommonM8(Base):
         return res
 
     showkeydict_ctrl = {
-        #2025年2月28日 兼容ham openbmc 提到上一层
-        # "Id": '@odata.id',
-        # "Index": "@odata.id",
-        # "Name": "@odata.id",  # PCIE1_RAID
         "RaidType": ['Oem', 'Public', 'RaidType'],
         "Description": 'Description',
         "Model": 'Model',
@@ -3093,23 +2683,22 @@ class CommonM8(Base):
         "SubDeviceId": ['Oem', 'Public', 'PCISubDeviceID'],
         "ChipRevision": ['Oem', 'Public', 'Chip'],
         "HostPortCount": None,
-        "HostInterface": ['Oem', 'Public', 'HostInterface'],#NE3180M8
+        "HostInterface": ['Oem', 'Public', 'HostInterface'],
         "DevicePortCount": None,
         "DeviceInterface": None,
         "fwVersion": "FirmwareVersion",
         "FwVerBuildDate": None,
         "FwVerBuildTime": None,
-        "BiosVersion": ['Oem', 'Public', 'BIOSVersion'], #NE3180M8
-        # "PackageVersion": ['Oem', 'Huawei', 'ConfigurationVersion'],#NVDATA Version
+        "BiosVersion": ['Oem', 'Public', 'BIOSVersion'],
         "NVDATAVersion": "PackageVersion",
         "TempROC": None,
         "TempCtrl": None,
         "FwCurTime": None,
-        "LogicalDevCnt": None,  # 需要计算
+        "LogicalDevCnt": None,
         "LogicalDevDegradedCnt": None,
         "LogicalDevOfflineCnt": None,
-        "PhysicalDevCnt": None,  # 物理磁盘数+1
-        "PhysicalDiskDevCnt": None,  # 物理磁盘数 'Drives@odata.count'
+        "PhysicalDevCnt": None,
+        "PhysicalDiskDevCnt": None,
         "PhysicalDiskDevPredFailCnt": None,
         "PhysicalDiskDevFailCnt": None,
         "NVRAMSize": None,
@@ -3120,8 +2709,8 @@ class CommonM8(Base):
         "StripMaxSize": ['Oem', 'Public', 'StripMaxSize'],
         "SupportShieldState": None,
         "SupportJBOD": None,
-        "EnableJBOD": ['Oem', 'Public', 'JBOD'], #NE3180M8
-        "JBODConfig": ['Oem', 'Public', 'JBODConfig'], #NE3180M8
+        "EnableJBOD": ['Oem', 'Public', 'JBOD'],
+        "JBODConfig": ['Oem', 'Public', 'JBODConfig'],
         "Status": None,
         "SequenceNum": None,
         "PredFailPollInterval": None,
@@ -3171,7 +2760,7 @@ class CommonM8(Base):
         "Speed": "SpeedGbps",
         "UnconfiguredGoodSpinDown": None,
         #
-        "CopyBack": ['Oem', 'Public', 'CopyBack'],  # True
+        "CopyBack": ['Oem', 'Public', 'CopyBack'],
         "SmartCopyBack": None,
         "Ncq": None,
         "HotSpareSpinDown": None,
@@ -3192,16 +2781,15 @@ class CommonM8(Base):
         "ControllerMode": ['Oem', 'Public', 'ControllerMode'],
         "HardwareRevision": ['Oem', 'Public', 'HardwareRevision'],
         "Memory": ['Oem', 'Public', 'Memory'],
-        "MemoryChangeable": ['Oem', 'Public', 'MemoryChangeable'],#NE3180M8
-        "MemoryCorrectErrCount": ['Oem', 'Public', 'MemoryCorrectErrCount'],#NE3180M8
-        "MemoryUnCorrectErrCount": ['Oem', 'Public', 'MemoryUnCorrectErrCount'],#NE3180M8
+        "MemoryChangeable": ['Oem', 'Public', 'MemoryChangeable'],
+        "MemoryCorrectErrCount": ['Oem', 'Public', 'MemoryCorrectErrCount'],
+        "MemoryUnCorrectErrCount": ['Oem', 'Public', 'MemoryUnCorrectErrCount'],
         "WWN": ['Oem', 'Public', 'WWN'],
         "SeqNumLastCleanShutdownEvent": ['Oem', 'Public', 'SeqNumLastCleanShutdownEvent'],
         "SeqNumLastClearEvent": ['Oem', 'Public', 'SeqNumLastClearEvent'],
         "SeqNumNewestEvent": ['Oem', 'Public', 'SeqNumNewestEvent'],
         "SeqNumOldestEvent": ['Oem', 'Public', 'SeqNumOldestEvent'],
         "SeqNumThisSessionBootEvent": ['Oem', 'Public', 'SeqNumThisSessionBootEvent'],
-        #NE3180M8
         "SupportedControllerProtocols": "SupportedControllerProtocols",
         "SupportedDeviceProtocols": "SupportedDeviceProtocols",
         "PortCount": ['Oem', 'Public', 'PortCount'],
@@ -3293,14 +2881,10 @@ class CommonM8(Base):
         return res
 
     showkeydict_virtual = {
-        # "Id": "Id",
-        # "Index": "Id",
-        # "TargetID": "Id",
         "SN": None,
         "VolumeName": "Name",
         "RaidLevel": "RAIDType",
         "ControllerName": ["Oem", "Public", "ControllerName"],
-        # DefaultCachePolicy, DefaultIOPolicy 应该是一套
         "DefaultCachePolicy": None,
         "DefaultWritePolicy": None,
         "DefaultReadPolicy": None,
@@ -3611,7 +3195,6 @@ class CommonM8(Base):
         else:
             bmcres.State("Failure")
             bmcres.Message([res.Message])
-        # logout
         return bmcres
 
     def exportbioscfg(self, client, args):
@@ -3627,7 +3210,6 @@ class CommonM8(Base):
             with open(args.fileurl, 'w') as f:
                 import json
                 f.write(json.dumps(result.Message.json(), indent=4))
-                # f.write(str(result.Message.json()))
             res.State('Success')
             res.Message('Bios Configuration export to ' + str(args.fileurl))
         else:
@@ -3943,7 +3525,6 @@ class CommonM8(Base):
                         user_bios.get(attr_parent)[attr] = int(value)
                     else:
                         user_bios[attr_parent] = {attr: int(value)}
-                    # user_bios[attr] = int(value)
                 else:
                     if item_dict['match'] and value not in attr_setter:
                         res.Message(['[{}] is invalid value for bios option [{}], and valid values are [{}].'
@@ -3955,8 +3536,6 @@ class CommonM8(Base):
                         user_bios.get(attr_parent)[attr] = str(attr_setter.get(value, value))
                     else:
                         user_bios[attr_parent] = {attr: str(attr_setter.get(value, value))}
-
-                    # user_bios[attr] = str(attr_setter.get(value, value))
 
         if bootdict:
             # 需要特殊处理boot相关
@@ -3998,7 +3577,6 @@ class CommonM8(Base):
         if not conditionflag:
             res.State('Failure')
             res.Message([conditionmessage])
-            # logout
             return res
 
         user_bios_f = self.formatBiosPatchBody(user_bios)
@@ -4052,22 +3630,7 @@ class CommonM8(Base):
 
 
     def _get_xml_mapper(self, args, key, value):
-        """
-            {
-                'descriptionName': {
-                    'description': 'descriptionName',
-                    'list': 64,
-                    'match': True/False,
-                    'parent': 'server_bios_parent_key',
-                    'getter': 'server_bios_key',
-                    'setter': {
-                        'cmd': 'value' 或 'value': 'cmd' 根据参数确定
-                    }
-                }
-            }
-        """
         try:
-            # xml_filepath = sys.path[0] + '/mappers/bios/M7.xml'
             xml_filepath = self._get_xml_file(args)
             import xml.etree.ElementTree as ET
             tree = ET.parse(xml_filepath)
@@ -4094,25 +3657,7 @@ class CommonM8(Base):
             return False, str(e)
 
     def _get_xml(self, args):
-        """
-            {
-                'getter': {
-                    'description': 'descriptionName',
-                    'type': 'int/str/list/dict',
-                    'match': True/False,
-                    'parent': 'server_bios_parent_key',
-                    'getter': 'server_bios_key',
-                    'setter': {
-                        'cmd': 'value'
-                    },
-                    'condition': {
-                        'getter': 'cmd'
-                    }
-                }
-            }
-        """
         try:
-            # xml_filepath = sys.path[0] + '/mappers/bios/M7.xml'
             xml_filepath = self._get_xml_file(args)
             import xml.etree.ElementTree as ET
             tree = ET.parse(xml_filepath)
@@ -4138,20 +3683,24 @@ class CommonM8(Base):
         except Exception as e:
             return False, str(e)
 
+    def formatCondition(self, conditionkey, conditionvalue, conditionvalue2, type):
+        conditioninfo = ""
+        must_be_ = " must be "
+        if type == 1:
+            conditioninfo = conditionkey + must_be_ + conditionvalue + ", but the value is setted to " + conditionvalue2
+        elif type == 2:
+            conditioninfo = conditionkey + must_be_ + conditionvalue + ", but the value will be setted to " + conditionvalue2
+        elif type == 3:
+            conditioninfo = conditionkey + must_be_ + conditionvalue + ", but the current value is " + conditionvalue2
+        return conditioninfo
+
     # 判断是否可以设置
-    # bios_set={redfishkey,redfishvalue}
-    # bios_future={redfishkey,redfishvalue}
-    # bios_cur={redfishkey,redfishvalue}
-    # bios_all_info={clikey, allinfo}
+
     def judgeCondition(self, bios_set, bios_future, bios_cur, bios_all_info):
         conditionflag = True
-        # getter: {conditiongetter:{}}
         conditionDict = {}
-        # getter:  {getter2: value}
         condition_dict = {}
-        # getter: description
         bios_dict = {}
-        # getter: {cmd: value}
         bios_value_dict = {}
         errordict = {}
         for bioskey, biosvalue in bios_set.items():
@@ -4176,7 +3725,6 @@ class CommonM8(Base):
                 condition_bios_info = bios_all_info.get(conditionkey)
                 # condition 的 cli 展示 key
                 conditionkeyshow = condition_bios_info.get("description")
-                # {bmc value: cli value}
                 conditionvaluedict = condition_bios_info.get("setter")
                 conditionvalueshow = conditionvaluedict.get(conditionvalue, conditionvalue)
                 conditionparent = condition_bios_info.get("parent")
@@ -4231,13 +3779,13 @@ class CommonM8(Base):
     def setbootimage(self, client, args):
         result = ResultBean()
         result.State("Not Support")
-        result.Message(['The M8 model does not support this feature.'])
+        result.Message(['The M7 model does not support this feature.'])
         return result
 
     def getbootimage(self, client, args):
         result = ResultBean()
         result.State("Not Support")
-        result.Message(['The M8 model does not support this feature.'])
+        result.Message(['The M7 model does not support this feature.'])
         return result
 
     def getsysboot(self, client, args):
@@ -4299,30 +3847,6 @@ class CommonM8(Base):
         return res
 
     def getconnectmedia(self, client, args):
-        # restful web
-        MediaType = {1: 'CD/DVD',
-                     2: 'Floppy',
-                     4: 'Harddisk'}
-        RedirectionStatus = {0: '~',
-                             1: 'Started',
-                             2: "Connection Denied",
-                             3: "Login Failed",
-                             4: "MAX Session Reached",
-                             5: "Permission Denied",
-                             6: "Unknown Error",
-                             7: "Media Detach Stage",
-                             8: "Maximum User Reached",
-                             9: "Unable to Connect",
-                             10: "Invalid Image",
-                             11: "Mount Error",
-                             12: "Unable to Open",
-                             13: "Media License Expired",
-                             14: "Connection Lost",
-                             15: "Mount Cancelled By User",
-                             16: "Device Ejected",
-                             17: "Session Terminated",
-                             100: "Starting..."
-                             }
         url_result = self.get_url_info(sys._getframe().f_code.co_name)
         result = RedfishTemplate.get_for_object_single(client, url_result.get('url'))
         res = ResultBean()
@@ -4449,8 +3973,8 @@ class CommonM8(Base):
             if result.State:
                 networks = result.Message
                 channel_dict = {
-                    "shared": "8",  # eth1
-                    "dedicated": "1",  # eth0
+                    "shared": "8",
+                    "dedicated": "1",
                     "bond": "1"
                 }
                 for network in networks:
@@ -4720,7 +4244,6 @@ class CommonM8(Base):
         if args.mode == 'Automatic' or args.mode == "auto":
             return setfanmode('Auto')
         elif args.mode == 'manual' and args.id is None:
-            # res = ResultBean()
             res = setfanmode('Manual')
             if res.State != "Success":
                 return res
@@ -4862,9 +4385,6 @@ class CommonM8(Base):
         else:
             result.State("Failure")
             result.Message(get_process_res.Message)
-        # else:
-        #     result.State("Failure")
-        #     result.Message("get onekey log task failed.")
         return result
 
     def getgpu(self, client, args):
@@ -4915,9 +4435,6 @@ class CommonM8(Base):
                 single_data['MaxSpeed(MHZ)'] = item.get('MaxSpeedMHz', "N/A")
                 single_data['TotalCores'] = item.get('TotalCores', "N/A")
                 single_data['TotalThreads'] = item.get('TotalThreads', "N/A")
-                # single_data['L1Cache(KB)'] = item.get('Oem', {}).get('Public', {}).get('L1CacheKiB', "N/A")
-                # single_data['L2Cache(KB)'] = item.get('Oem', {}).get('Public', {}).get('L2CacheKiB', "N/A")
-                # single_data['L3Cache(KB)'] = item.get('Oem', {}).get('Public', {}).get('L3CacheKiB', "N/A")
                 ProcessorMemory = item.get("ProcessorMemory", [])
                 if ProcessorMemory is not None and isinstance(ProcessorMemory, list) and len(ProcessorMemory) > 0:
                     for p_item in ProcessorMemory:
@@ -4950,17 +4467,7 @@ class CommonM8(Base):
 
                 single_data['PPIN'] = item.get('Oem', {}).get('Public', {}).get('SerialNumber', "N/A")
                 single_data['MicroCode'] = item.get('ProcessorId', {}).get('MicrocodeInfo', "N/A")
-                # single_data['TurboEnableMaxSpeed(MHz)'] = item.get('Oem', {}).get('Public', {}).get(
-                #     'TurboEnableMaxSpeedMHz', "N/A")
-                # single_data['TurboDisableMaxSpeed(MHz)'] = item.get('Oem', {}).get('Public', {}).get(
-                #     'TurboDisableMaxSpeedMHz', "N/A")
-                # single_data['VendorId'] = item.get('ProcessorId', {}).get('VendorId', "N/A")
-                # single_data['IdentificationRegisters'] = item.get('ProcessorId', {}).get('IdentificationRegisters',
-                #                                                                          "N/A")
-                # single_data['EffectiveFamily'] = item.get('ProcessorId', {}).get('EffectiveFamily', "N/A")
-                # single_data['Step'] = item.get('ProcessorId', {}).get('Step', "N/A")
                 single_data['InstructionSet'] = item.get('InstructionSet', "N/A")
-                # single_data['ProcessorArchitecture'] = item.get('ProcessorArchitecture', "N/A")
                 single_data['Vendor'] = item.get('Manufacturer', "N/A")
                 data_cpu.append(single_data)
             data['CPU'] = data_cpu
@@ -5016,33 +4523,6 @@ class CommonM8(Base):
             res.Message(data)
         else:
             res = result
-        return res
-
-    def getbackplane(self, client, args):
-        url_result = self.get_url_info(sys._getframe().f_code.co_name)
-        result = RedfishTemplate.get_for_collection_object(client, url_result.get('url'))
-        res = ResultBean()
-        if result.State:
-            info = result.Message
-            data_sum = []
-            for item in info:
-                single_data = collections.OrderedDict()
-                single_data['ID'] = item.get('Id', "N/A")
-                single_data['Present'] = "Present" if "enable" in str(item.get('Status', {}).get('State', "N/A")).lower() else "Absent"
-                # single_data['Name'] = item.get('Name', "N/A")
-                # single_data['Manufacturer'] = item.get('Manufacturer', "N/A")
-                # single_data['SerialNumber'] = item.get('SerialNumber', "N/A")
-                # single_data['PartNumber'] = item.get('PartNumber', "N/A")
-                single_data['FwVersion'] = item.get('BackplaneVersion', "N/A")
-                single_data['TotalSlotCount'] = item.get('PortCount', "N/A")
-                single_data['Temperature'] = item.get('Temperature', "N/A")
-                # single_data['Status'] = item.get('Status', {}).get('Health', "N/A")
-                data_sum.append(single_data)
-            res.State("Success")
-            res.Message(data_sum)
-        else:
-            res.State("Failure")
-            res.Message(result.Message)
         return res
 
     def getpsu(self, client, args):
@@ -5185,7 +4665,6 @@ class CommonM8(Base):
         result = RedfishTemplate.get_for_object_single(client, url_result.get('url'))
         if result.State:
             logsettings = result.Message
-            # data = {'ServiceEnabled': logsettings.get('ServiceEnabled', 'N/A')}
             data = collections.OrderedDict()
             enable_dict = {
                 "LocalEnable": "Local",
@@ -5235,7 +4714,6 @@ class CommonM8(Base):
                             res.State('Failure')
                             res.Message(str(args.serverId) + ' syslog server not enable.')
                             return res
-                # for 正常循环结束会进入else，break退出不会进else
                 else:
                     res.State('Failure')
                     res.Message("can not get " + str(args.serverId) + " syslog server settings.")
@@ -5268,7 +4746,7 @@ class CommonM8(Base):
                 if 'Name' in data:
                     del data['Name']
                 if 'ServiceEnabled' in data:
-                    del data['ServiceEnabled']  # 'SyslogEnable' 一直是True， 暂不清楚如何设置
+                    del data['ServiceEnabled']
                 if args.status:
                     data['ServiceSyslogEnable'] = 'RemoteEnable' if args.status == 'enable' else 'LocalEnable'
                 if args.level:
@@ -6106,15 +5584,8 @@ class CommonM8(Base):
             setpdurl = url_result.get('url').replace("{cid}", str(args.ctrlId)).replace("{pid}", M8PMCkey + str(args.deviceId))
             mydict["Action"] = "start"
             if args.duration:
-                # if args.duration < 1 or args.duration > 255:
-                #     result.State("Failure")
-                #     result.Message('Invalid Duration(1-255).')
-                #     return result
                 mydict["Duration"] = args.duration
             else:
-                # result.State("Failure")
-                # result.Message('-D is needed when locate virtual drive')
-                # return result
                 mydict["Duration"] = 0
         elif args.option == "STL":
             url_result = self.get_url_info("locatephysicadrive")
@@ -6231,7 +5702,6 @@ class CommonM8(Base):
         if result.State:
             info = result.Message
             data_res = {}
-            #On Off
             data_res['PowerStatus'] = info.get('PowerState', "unknown")
             res.State("Success")
             res.Message(data_res)
@@ -6299,7 +5769,7 @@ class CommonM8(Base):
         if result.State:
             info = result.Message.get("PowerSupplies", [])
             for item in info:
-                data_map[item.get("MemberId", "N/A")] = item.get("Name", "N/A")
+                data_map[item.get("MemberId", "N/A")] = item.get("MemberId", "N/A")
         else:
             res.State('Failure')
             res.Message(result.Message)
@@ -6312,7 +5782,7 @@ class CommonM8(Base):
         workmode = switch_dict.get(args.switch)
         patch_data = {'PowerSupplies': []}
         if workmode == "Normal":
-            for key, vaule in data_map.items():
+            for key,vaule in data_map.items():
                 patch_data['PowerSupplies'].append(self.create_psu(vaule, workmode))  # 生成相同结构
         else:
             # 判断id不能为空
@@ -6334,10 +5804,10 @@ class CommonM8(Base):
                 activelist = list(set(id_list) ^ set(data_map.keys()))
                 for id in activelist:
                     patch_data['PowerSupplies'].append(self.create_psu(data_map.get(id), 'Active'))
-        sorted_data = sorted(patch_data['PowerSupplies'], key=lambda x: x["Name"])
+        sorted_data = sorted(patch_data['PowerSupplies'], key=lambda x: x["MemberId"])
         patchBody = {}
         patchBody['url'] = str(url_result.get('url'))
-        patchBody['json'] = {'PowerSupplies': sorted_data}
+        patchBody['json'] = {'PowerSupplies':sorted_data}
         result = RedfishTemplate.patch_for_object(client, patchBody)
         if result.State:
             res.State("Success")
@@ -6417,9 +5887,23 @@ class CommonM8(Base):
         return res
 
     def setservice(self, client, args):
+        res = ResultBean()
+        if args.servicename == 'web' or args.servicename == 'ssh' or args.servicename == 'ipmi':
+            if args.nonsecureport is not None:
+                res.State("Failure")
+                res.Message([args.servicename + " not support nonsecure port."])
+                return res
+        if args.servicename == 'ipmi' and args.secureport is not None:
+            res.State("Failure")
+            res.Message([args.servicename + " not support secure port."])
+            return res
+        if args.servicename == 'ipmi' or args.servicename == 'virtualmedia':
+            if args.timeout is not None:
+                res.State("Failure")
+                res.Message([args.servicename + " not support timeout."])
+                return res
         url_result = self.get_url_info(sys._getframe().f_code.co_name)
         result = RedfishTemplate.get_for_object_single(client, url_result.get('url'))
-        res = ResultBean()
         if result.State:
             info = result.Message
             service_name = {
@@ -6593,9 +6077,6 @@ class CommonM8(Base):
                 "BIOS": 2,
                 "ME": 2.5,
                 "MainBoardCPLD": 3,
-                # "Front_HDD_CPLD": 4,
-                # "Rear_HDD_CPLD": 5,
-                # "PSU": 6,
                 "SCMCPLD": 7,
                       }
             fwdictx = {
@@ -6612,7 +6093,6 @@ class CommonM8(Base):
             else:
                 for fkey in fwdictx.keys():
                     if key.startswith(fkey + "_"):
-                        #PSU_0
                         return float(str(fwdictx.get(fkey)) + "." + key[len(fkey + "_")])
                     if key.startswith(fkey):
                         return float(str(fwdictx.get(fkey)) + "." + key[len(fkey)])
@@ -6650,12 +6130,6 @@ class CommonM8(Base):
                 res.Message(data_sum)
             else:
                 data_sum = []
-                name_dict = {
-                    "Bios": "BIOS",
-                    "PSU_0": "PSU0",
-                    "PSU_1": "PSU1",
-                    "MainBoard0CPLD": "MainBoardCPLD"
-                }
                 for item in data:
                     fw_single_url = item.get("@odata.id")
                     fw_single_res = RedfishTemplate.get_for_object_single(client, fw_single_url)
@@ -6782,7 +6256,6 @@ class CommonM8(Base):
                         single_data['Front/Rear'] = "Unknown"
 
                 if len(disk_id) == 9:
-                    # locate = disk_id[:2]
                     plane_id = disk_id[2:4]
                     single_id = disk_id[7:9]
                     single_data['BackplaneIndex'] = str(int(plane_id))
@@ -6796,7 +6269,6 @@ class CommonM8(Base):
                 if "ModuleNumber" in item:
                     single_data['Model'] = str(item.get('ModuleNumber', 'N/A'))
                 else:
-                    # ham
                     single_data['Model'] = item.get("Oem", {}).get("Public", {}).get("ModuleNumber", 'N/A')
 
                 single_data['Vendor'] = item.get("Manufacturer", "N/A")
@@ -7136,7 +6608,6 @@ class CommonM8(Base):
     def getbmcinfo(self, client, args):
         result = ResultBean()
         infoList = []
-        status = 0
         product = IpmiFunc.getAllFruByIpmi(client)
         if product:
             frubean = FruBean()
@@ -7376,6 +6847,7 @@ class CommonM8(Base):
             result = self.delusergroup(client, args)
         elif args.state == 'present':
             group = ['OEM1', 'OEM2','OEM3','OEM4']
+
             if args.name in group:
                 result = self.setusergroup(client, args)
             else:
@@ -7467,7 +6939,7 @@ class CommonM8(Base):
             "KeyLength":2048
         }
         patchBody = {}
-        patchBody['url'] = url_result.get('url') + '/' +  args.name
+        patchBody['url'] = url_result.get('url') + '/' + args.name
         patchBody['json'] = data
         result = RedfishTemplate.post_for_object(client, patchBody)
         if result.State:
@@ -7513,7 +6985,6 @@ class CommonM8(Base):
             res.Message(result.Message)
         return res
 
-
     def healthCheck(self, client, args):
         url_result = self.get_url_info("getcurrentalarms")
         result = RedfishTemplate.get_for_object_single(client, url_result.get('url')+"?$top=1900")
@@ -7542,175 +7013,169 @@ class CommonM8(Base):
     def updatecpld(self, client, args):
         result = ResultBean()
         result.State("Not Support")
-        result.Message(['The M8 model does not support this feature.'])
+        result.Message(['The M7 model does not support this feature.'])
         return result
 
     def updatebios(self, client, args):
         result = ResultBean()
         result.State("Not Support")
-        result.Message(['The M8 model does not support this feature.'])
+        result.Message(['The M7 model does not support this feature.'])
         return result
 
     def fwupdate(self, client, args):
         result = ResultBean()
         result.State("Not Support")
-        result.Message(['The M8 model does not support this feature.'])
+        result.Message(['The M7 model does not support this feature.'])
         return result
 
     def clearauditlog(self, client, args):
         result = ResultBean()
         result.State("Not Support")
-        result.Message(['The M8 model does not support this feature.'])
+        result.Message(['The M7 model does not support this feature.'])
         return result
 
     def clearsystemlog(self, client, args):
         result = ResultBean()
         result.State("Not Support")
-        result.Message(['The M8 model does not support this feature.'])
+        result.Message(['The M7 model does not support this feature.'])
         return result
 
     def collectblackbox(self, client, args):
         result = ResultBean()
         result.State("Not Support")
-        result.Message(['The M8 model does not support this feature.'])
+        result.Message(['The M7 model does not support this feature.'])
         return result
 
     def setmediainstance(self, client, args):
         result = ResultBean()
         result.State("Not Support")
-        result.Message(['The M8 model does not support this feature.'])
+        result.Message(['The M7 model does not support this feature.'])
         return result
 
     def getmediainstance(self, client, args):
         result = ResultBean()
         result.State("Not Support")
-        result.Message(['The M8 model does not support this feature.'])
+        result.Message(['The M7 model does not support this feature.'])
         return result
 
     def getnetworklink(self, client, args):
         result = ResultBean()
         result.State("Not Support")
-        result.Message(['The M8 model does not support this feature.'])
+        result.Message(['The M7 model does not support this feature.'])
         return result
 
     def setnetworklink(self, client, args):
         result = ResultBean()
         result.State("Not Support")
-        result.Message(['The M8 model does not support this feature.'])
+        result.Message(['The M7 model does not support this feature.'])
         return result
 
     def setpowerbudget(self, client, args):
         result = ResultBean()
         result.State("Not Support")
-        result.Message(['The M8 model does not support this feature.'])
+        result.Message(['The M7 model does not support this feature.'])
         return result
 
     def getpowerbudget(self, client, args):
         result = ResultBean()
         result.State("Not Support")
-        result.Message(['The M8 model does not support this feature.'])
+        result.Message(['The M7 model does not support this feature.'])
         return result
 
     def getpreserveconfig(self, client, args):
         result = ResultBean()
         result.State("Not Support")
-        result.Message(['The M8 model does not support this feature.'])
+        result.Message(['The M7 model does not support this feature.'])
         return result
 
     def preserveconfig(self, client, args):
         result = ResultBean()
         result.State("Not Support")
-        result.Message(['The M8 model does not support this feature.'])
+        result.Message(['The M7 model does not support this feature.'])
         return result
 
     def getpsupeak(self, client, args):
         result = ResultBean()
         result.State("Not Support")
-        result.Message(['The M8 model does not support this feature.'])
+        result.Message(['The M7 model does not support this feature.'])
         return result
 
     def setpsupeak(self, client, args):
         result = ResultBean()
         result.State("Not Support")
-        result.Message(['The M8 model does not support this feature.'])
-        return result
-
-    def setthreshold(self, client, args):
-        result = ResultBean()
-        result.State("Not Support")
-        result.Message(['The M8 model does not support this feature.'])
+        result.Message(['The M7 model does not support this feature.'])
         return result
 
     def geteventlogpolicy(self, client, args):
         result = ResultBean()
         result.State("Not Support")
-        result.Message(['The M8 model does not support this feature.'])
+        result.Message(['The M7 model does not support this feature.'])
         return result
 
     def seteventlogpolicy(self, client, args):
         result = ResultBean()
         result.State("Not Support")
-        result.Message(['The M8 model does not support this feature.'])
+        result.Message(['The M7 model does not support this feature.'])
         return result
 
     def getkvm(self, client, args):
         result = ResultBean()
         result.State("Not Support")
-        result.Message(['The M8 model does not support this feature.'])
+        result.Message(['The M7 model does not support this feature.'])
         return result
 
     def setkvm(self, client, args):
         result = ResultBean()
         result.State("Not Support")
-        result.Message(['The M8 model does not support this feature.'])
+        result.Message(['The M7 model does not support this feature.'])
         return result
 
     def getpowerconsumption(self, client, args):
         result = ResultBean()
         result.State("Not Support")
-        result.Message(['The M8 model does not support this feature.'])
+        result.Message(['The M7 model does not support this feature.'])
         return result
 
     def getsystemlog(self, client, args):
         result = ResultBean()
         result.State("Not Support")
-        result.Message(['The M8 model does not support this feature.'])
+        result.Message(['The M7 model does not support this feature.'])
         return result
 
     def getthreshold(self, client, args):
         result = ResultBean()
         result.State("Not Support")
-        result.Message(['The M8 model does not support this feature.'])
+        result.Message(['The M7 model does not support this feature.'])
         return result
 
     def setthreshold(self, client, args):
         result = ResultBean()
         result.State("Not Support")
-        result.Message(['The M8 model does not support this feature.'])
+        result.Message(['The M7 model does not support this feature.'])
         return result
 
     def setvirtualmedia(self, client, args):
         result = ResultBean()
         result.State("Not Support")
-        result.Message(['The M8 model does not support this feature.'])
+        result.Message(['The M7 model does not support this feature.'])
         return result
 
     def getvirtualmedia(self, client, args):
         result = ResultBean()
         result.State("Not Support")
-        result.Message(['The M8 model does not support this feature.'])
+        result.Message(['The M7 model does not support this feature.'])
         return result
 
     def setsmtp(self, client, args):
         result = ResultBean()
         result.State("Not Support")
-        result.Message(['The M8 model does not support this feature.'])
+        result.Message(['The M7 model does not support this feature.'])
         return result
 
     def setbmclogsettings(self, client, args):
         result = ResultBean()
         result.State("Not Support")
-        result.Message(['The M8 model does not support this feature.'])
+        result.Message(['The M7 model does not support this feature.'])
         return result
 
 def filePath(flagtype, args):
@@ -7866,12 +7331,6 @@ def wirte_log(log_path, stage="", state="", note=""):
                 log_list = log_cur_dict.get("log")
 
         with open(log_path, 'w') as logfile:
-            # {
-            #     "Time":"2018-11-20T10:20:12+08:00",
-            #     "Stage":"Upload File",
-            #     "State":"Invalid URI",
-            #     "Note":"Not support the protocol 'CIFS'."
-            #  }
             # 升级阶段：上传文件(Upload File)、文件校验(File Verify)、应用（刷写目标FLASH）(Apply)、生效(Activate)。
             # 错误状态：网络不通(Network Ping NOK)、无效URI(Invalid URI)、连接失败(Connect Failed)、文件不存在(File Not Exist)、空间不足(Insufficient Space)、格式错误(Format Error)、非法镜像(Illegal Image)、机型不支持(Unsupported Machine)、镜像与升级目标部件不匹配(Image and Target Component Mismatch)、BMC重启失败(BMC Reboot Failed)、版本校验失败(Version Verify Failed)、FLASH空间不足(Insufficient Flash)、FLASH写保护(FLASH Write Protection)、数据校验失败(Data Verify Failed)。
             # 正常进展：开始（Start）、进行中（In Progress）、完成（Finish）、成功（Success）、网络能ping通（Network Ping OK）、BMC重启成功（BMC Reboot Success）、升级完删除缓存的镜像成功(Delete Image Success)、升级重试第N次(Upgrade Retry N Times)、刷到暂存FLASH成功(Write to Temporary FLASH Success)、版本校验成功(Version Verify OK)、同步刷新另一片镜像成功(Sync Flash The Other Image Success)……。
@@ -7922,7 +7381,6 @@ class storageFuncs():
     def getDeviceID(self, value):
         return utoolUtil.getDeviceName(value)
 
-    # VIRTUAL
     def getRaidLevel(self, var):
         if var:
             if "raid" in var.lower():
@@ -7943,7 +7401,6 @@ class storageFuncs():
             return ",".join(dlist)
         return var
 
-    #openbmc
     def getid(self, var):
         return var.split("/")[-1]
 

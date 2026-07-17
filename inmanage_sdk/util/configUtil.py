@@ -48,7 +48,7 @@ class configUtil():
                 model_keysV = copy.deepcopy(list(model_info.keys()))
                 if model_info.get("platform") == "M7":
                     if ipmi_mode == "M7_redfish":
-                        model_info = interfacedict.get("OpenbmcM7")
+                        model_info = interfacedict.get("OpenBmcM7")
                         model_keysV = copy.deepcopy(list(model_info.keys()))
                 platform = model_info["platform"]
                 model_keysV.remove("platform")
@@ -65,8 +65,7 @@ class configUtil():
                         return model_info.get("common")
                     if len(model_keys) > 1:
                         for i in range(len(model_keys) - 1):
-                            if float(bmcVersion) >= float(model_keys[i]) and float(bmcVersion) < float(
-                                    model_keys[i + 1]):
+                            if float(model_keys[i]) <= float(bmcVersion) < float(model_keys[i + 1]):
                                 return model_info.get("V" + str(model_keys[i])), platform
                     return model_info.get("V" + str(model_keys[len(model_keys) - 1])), platform
                 else:
