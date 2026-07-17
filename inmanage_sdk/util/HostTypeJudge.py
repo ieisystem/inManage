@@ -8,7 +8,6 @@ import sys
 import os
 import re
 import platform
-from requests.auth import HTTPBasicAuth
 from inmanage_sdk.util import RequestClient, configUtil, RedfishTemplate
 
 sys.path.append(
@@ -49,9 +48,11 @@ class HostTypeClient():
             return result
         else:
             res = {}
+            is_redfish = False
             pn, version = self.judge_by_ipmi_api(host, username, passcode, port)
             if pn == '':
                 pn, version = self.judge_by_redfish_api(host, username, passcode, port)
+                is_redfish = True
             if pn == '':
                 res['State'] = "Failure"
                 res['Message'] = [version]
@@ -61,10 +62,13 @@ class HostTypeClient():
             if hosttpye == "":
                 hosttpye = pn
             if hosttpye == "M7":
-                client = RequestClient.RequestClient()
-                client.setself(host, username, passcode, '', port, "lanplus")
-                if IpmiFunc.checkPlatform(client).get("bmc") == "01":
+                if is_redfish:
                     hosttpye = "M7_redfish"
+                else:
+                    client = RequestClient.RequestClient()
+                    client.setself(host, username, passcode, '', port, "lanplus")
+                    if IpmiFunc.checkPlatform(client).get("bmc") == "01":
+                        hosttpye = "M7_redfish"
             impl, platform = configutil.getRouteOption(pn, version, hosttpye)
             if 'Error' in impl:
                 res['State'] = "Failure"
@@ -128,7 +132,6 @@ class HostTypeClient():
         return "M4"
 
     def judge_by_ipmi_api(self, host, username, passcode, port):
-        productName = None
         try:
             client = RequestClient.RequestClient()
             client.setself(host, username, passcode, '', port, "lanplus")
@@ -136,8 +139,6 @@ class HostTypeClient():
             if productName is None:
                 return "", "cannot get Product Name(Model)."
             elif productName in ERR_dict:
-                res['State'] = "Failure"
-                res['Message'] = [ERR_dict.get(productName)]
                 return "", ERR_dict.get(productName)
             firmwareVersion = IpmiFunc.getFirmwareVersoinByMcinfo(client)
             if firmwareVersion is None:
@@ -148,24 +149,19 @@ class HostTypeClient():
         return productName, firmwareVersion
 
     def judge_by_redfish_api(self, host, username, passcode, port):
-        host_type = None
-        pn = None
         try:
             client = RequestClient.RequestClient()
             client.setself(host, username, passcode, '', port, "lanplus")
             res = self.getProductName(client)
-            pn = ''
             if res['State'] == 'Success':
                 pn = res['Message']
             else:
                 return "", "cannot get Product Name(Model)."
             res = self.getBmcVersion(client)
-            version = ''
             if res['State'] == 'Success':
                 version = res['Message']
             else:
                 return "", "cannot get Bmc version."
-
         except Exception as e:
             return "", "get FRU info failed, except info: " + str(e)
         return pn, version
